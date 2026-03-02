@@ -86,7 +86,7 @@ exports.getGroupMessages = async (req, res) => {
 };
 
 // ============================
-// SEND GROUP MESSAGE
+// SEND GROUP MESSAGE (supports optional image via multipart)
 // ============================
 exports.sendGroupMessage = async (req, res) => {
     try {
@@ -104,7 +104,14 @@ exports.sendGroupMessage = async (req, res) => {
         const isMember = group.members.some((m) => m.toString() === senderId.toString());
         if (!isMember) return res.status(403).json({ success: false, message: "Not a member" });
 
-        const message = await GroupMessage.create({ groupId, senderId, senderName, text });
+        let imageUrl = "";
+        if (req.file) {
+            const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+            const upload = await require("../config/cloudinary").uploader.upload(dataUri);
+            imageUrl = upload.secure_url || "";
+        }
+
+        const message = await GroupMessage.create({ groupId, senderId, senderName, text, image: imageUrl });
 
         // Emit to socket room for this group
         io.to(`group:${groupId}`).emit("newGroupMessage", message);
@@ -112,6 +119,38 @@ exports.sendGroupMessage = async (req, res) => {
         return res.status(201).json(message);
     } catch (err) {
         console.error("sendGroupMessage error:", err);
+        return res.status(500).json({ success: false, message: "Server error" });
+    }
+};
+
+
+// ============================
+// DELETE GROUP MESSAGE (soft)
+// ============================
+exports.deleteGroupMessage = async (req, res) => {
+    try {
+        const { groupId, messageId } = req.params;
+        const userId = req.user._id || req.user.id;
+
+        const message = await GroupMessage.findById(messageId);
+        if (!message) return res.status(404).json({ success: false, message: "Message not found" });
+
+        if (message.senderId.toString() !== userId.toString() && !req.user.isAdmin) {
+            return res.status(403).json({ success: false, message: "Not authorized to delete this message" });
+        }
+
+        message.deleted = true;
+        await message.save();
+
+        io.to(`group:${groupId}`).emit("messageDeleted", {
+            messageId: message._id,
+            chatType: "group",
+            groupId,
+        });
+
+        return res.json({ success: true });
+    } catch (err) {
+        console.error("deleteGroupMessage error:", err);
         return res.status(500).json({ success: false, message: "Server error" });
     }
 };

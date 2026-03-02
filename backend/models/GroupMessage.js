@@ -24,6 +24,10 @@ const groupMessageSchema = new mongoose.Schema(
             type: String,
             default: "",
         },
+        deleted: {
+            type: Boolean,
+            default: false,
+        },
     },
     { timestamps: true }
 );
