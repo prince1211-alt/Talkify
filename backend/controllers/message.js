@@ -100,8 +100,10 @@ exports.deleteMessage = async (req, res) => {
     const message = await Message.findById(messageId);
     if (!message) return res.status(404).json({ message: "Message not found" });
 
-    // Allow sender or admin (if isAdmin flag exists on user)
-    if (message.senderId.toString() !== userId.toString() && !req.user.isAdmin) {
+    // Allow sender, receiver, or admin (if isAdmin flag exists on user)
+    const isSender = message.senderId.toString() === userId.toString();
+    const isReceiver = message.receiverId.toString() === userId.toString();
+    if (!isSender && !isReceiver && !req.user.isAdmin) {
       return res.status(403).json({ message: "Not authorized to delete this message" });
     }
 

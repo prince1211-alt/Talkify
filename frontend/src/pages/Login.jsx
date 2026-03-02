@@ -13,6 +13,12 @@ export default function Login() {
 
     const { login, isLoggingIn } = useAuthStore();
 
+    const [showForgot, setShowForgot] = useState(false);
+    const [forgotEmail, setForgotEmail] = useState("");
+    const [forgotStep, setForgotStep] = useState(1); // 1: send email, 2: verify & reset
+    const [otp, setOtp] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         const success = await login(formData);
@@ -93,8 +99,58 @@ export default function Login() {
                             Sign up
                         </Link>
                     </div>
+
+                    <div className="mt-4 text-center">
+                        <button onClick={() => setShowForgot(true)} className="text-sm text-indigo-600 hover:underline">Forgot password?</button>
+                    </div>
                 </div>
             </div>
+
+            {showForgot && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                    <div className="bg-white p-6 rounded-lg w-full max-w-md">
+                        <h3 className="text-lg font-bold mb-4">Forgot password</h3>
+                        {forgotStep === 1 ? (
+                            <>
+                                <p className="text-sm text-gray-600">Enter your registered email to receive an OTP.</p>
+                                <input value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="you@example.com" className="w-full mt-3 p-2 border rounded" />
+                                <div className="mt-4 flex justify-end gap-2">
+                                    <button onClick={() => setShowForgot(false)} className="px-3 py-1">Cancel</button>
+                                    <button onClick={async () => {
+                                        try {
+                                            await axiosInstance.post('/auth/forgot-password', { email: forgotEmail });
+                                            setForgotStep(2);
+                                            toast.success('OTP sent to your email');
+                                        } catch (err) {
+                                            toast.error(err.response?.data?.message || 'Failed to send OTP');
+                                        }
+                                    }} className="px-3 py-1 bg-indigo-600 text-white rounded">Send OTP</button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <p className="text-sm text-gray-600">Enter the OTP and your new password.</p>
+                                <input value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="OTP" className="w-full mt-3 p-2 border rounded" />
+                                <input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password" type="password" className="w-full mt-3 p-2 border rounded" />
+                                <div className="mt-4 flex justify-end gap-2">
+                                    <button onClick={() => { setShowForgot(false); setForgotStep(1); }} className="px-3 py-1">Cancel</button>
+                                    <button onClick={async () => {
+                                        try {
+                                            await axiosInstance.post('/auth/reset-password', { email: forgotEmail, otp, newPassword });
+                                            toast.success('Password reset successful. Please login.');
+                                            setShowForgot(false);
+                                            setForgotStep(1);
+                                            setOtp(''); setNewPassword(''); setForgotEmail('');
+                                        } catch (err) {
+                                            toast.error(err.response?.data?.message || 'Failed to reset password');
+                                        }
+                                    }} className="px-3 py-1 bg-indigo-600 text-white rounded">Reset Password</button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
