@@ -230,6 +230,18 @@ export default function ChatWindow() {
 }
 
 const MessageBubble = memo(({ message, isOwn, isGroup }) => {
+    const deleteMessage = useChatStore(state => state.deleteMessage);
+    const { authUser } = useAuthStore();
+
+    const handleDelete = async () => {
+        if (!window.confirm("Delete this message?")) return;
+        try {
+            await deleteMessage(message._id);
+        } catch (err) {
+            console.error("failed to delete message", err);
+        }
+    };
+
     return (
         <div className={`flex ${isOwn ? "justify-end" : "justify-start"} items-end gap-2`}>
             {!isOwn && (
@@ -243,18 +255,32 @@ const MessageBubble = memo(({ message, isOwn, isGroup }) => {
                     <span className="text-[11px] text-gray-500 mb-1 ml-1 font-bold">{message.senderName || "Unknown"}</span>
                 )}
 
-                <div
-                    className={`px-4 py-2.5 rounded-2xl shadow-sm ${isOwn
-                        ? "bg-indigo-600 text-white rounded-br-sm"
-                        : "bg-white border border-gray-100 text-gray-800 rounded-bl-sm"
-                        }`}
-                >
-                    <p className="text-[15px] leading-relaxed break-words">{message.text}</p>
-                </div>
+                {message.deleted ? (
+                    <div className={`px-4 py-2.5 rounded-2xl shadow-sm bg-gray-50 text-gray-500 italic text-sm`}>Message deleted</div>
+                ) : (
+                    <div
+                        className={`px-4 py-2.5 rounded-2xl shadow-sm ${isOwn
+                            ? "bg-indigo-600 text-white rounded-br-sm"
+                            : "bg-white border border-gray-100 text-gray-800 rounded-bl-sm"
+                            }`}
+                    >
+                        {message.image && (
+                            <img src={message.image} alt="attachment" className="max-w-[260px] rounded mb-2 object-cover" />
+                        )}
+                        <p className="text-[15px] leading-relaxed break-words">{message.text}</p>
+                    </div>
+                )}
 
-                <span className="text-[10px] text-gray-400 mt-1 mx-1 font-medium">
-                    {message.createdAt ? new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now"}
-                </span>
+                <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-gray-400 mt-1 mx-1 font-medium">
+                        {message.createdAt ? new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now"}
+                    </span>
+                    {((isOwn || authUser?.isAdmin) || String(message.receiverId) === authUser?._id) && !message.deleted && (
+                        <button onClick={handleDelete} className="text-red-500 text-xs">
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
             </div>
         </div>
     );

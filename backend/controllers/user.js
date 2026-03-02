@@ -200,3 +200,60 @@ exports.updateProfile = async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
+
+
+// ============================
+// 🔹 FORGOT PASSWORD - send OTP to existing user
+// ============================
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ success: false, message: "Email is required" });
+
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    // generate OTP and save (OTP model pre-save sends email)
+    let otp = otpGenerator.generate(6, { upperCaseAlphabets: false, lowerCaseAlphabets: false, specialChars: false });
+    let exists = await OTP.findOne({ otp });
+    while (exists) {
+      otp = otpGenerator.generate(6, { upperCaseAlphabets: false, lowerCaseAlphabets: false, specialChars: false });
+      exists = await OTP.findOne({ otp });
+    }
+
+    await OTP.create({ email, otp });
+
+    return res.json({ success: true, message: "OTP sent to your email" });
+  } catch (err) {
+    console.error("forgotPassword error:", err);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+
+// ============================
+// 🔹 RESET PASSWORD - verify OTP and set new password
+// ============================
+exports.resetPassword = async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword) return res.status(400).json({ success: false, message: "All fields are required" });
+
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    const response = await OTP.find({ email }).sort({ createdAt: -1 }).limit(1);
+    if (response.length === 0 || otp !== response[0].otp) {
+      return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    user.password = hashed;
+    await user.save();
+
+    return res.json({ success: true, message: "Password reset successfully" });
+  } catch (err) {
+    console.error("resetPassword error:", err);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};

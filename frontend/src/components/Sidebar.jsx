@@ -102,6 +102,11 @@ export default function Sidebar({ className = "" }) {
                                     <p className="font-semibold text-gray-900 truncate">{group.name}</p>
                                     <p className="text-xs text-indigo-600 font-medium">{group.members.length} members</p>
                                 </div>
+                                {group.unread > 0 && (
+                                    <div className="ml-2">
+                                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500 text-white">{group.unread}</span>
+                                    </div>
+                                )}
                             </button>
                         ))}
                         {filteredGroups.length === 0 && (
@@ -162,6 +167,11 @@ const UserItem = memo(({ user, isSelected, isOnline, onClick }) => (
             <p className="font-semibold text-gray-900 truncate">{user.fullName}</p>
             <p className="text-xs text-gray-500 truncate">{user.uniqueId}</p>
         </div>
+        {user.unread > 0 && (
+            <div className="pl-2">
+                <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500 text-white">{user.unread}</span>
+            </div>
+        )}
     </button>
 ));
 
