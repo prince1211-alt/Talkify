@@ -184,3 +184,81 @@ exports.deleteGroup = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error" });
     }
 };
+
+
+// ============================
+// REMOVE MEMBER FROM GROUP
+// ============================
+exports.removeMember = async (req, res) => {
+    try {
+        const { groupId, memberId } = req.params;
+        const userId = req.user._id || req.user.id;
+
+        const group = await Group.findById(groupId);
+        if (!group) return res.status(404).json({ success: false, message: "Group not found" });
+
+        // Only creator or admin can remove others
+        if (group.createdBy.toString() !== userId.toString() && !req.user.isAdmin) {
+            return res.status(403).json({ success: false, message: "Not authorized to remove members" });
+        }
+
+        // Don't allow removing the creator
+        if (group.createdBy.toString() === memberId.toString()) {
+            return res.status(400).json({ success: false, message: "Cannot remove the group creator" });
+        }
+
+        group.members = group.members.filter(m => m.toString() !== memberId.toString());
+        await group.save();
+
+        // Notify group room of updated members
+        io.to(`group:${groupId}`).emit("groupUpdated", { groupId, members: group.members });
+
+        // Notify removed member directly
+        io.to(memberId).emit("removedFromGroup", { groupId });
+
+        return res.json({ success: true, group });
+    } catch (err) {
+        console.error("removeMember error:", err);
+        return res.status(500).json({ success: false, message: "Server error" });
+    }
+};
+
+
+// ============================
+// LEAVE GROUP
+// ============================
+exports.leaveGroup = async (req, res) => {
+    try {
+        const { groupId } = req.params;
+        const userId = req.user._id || req.user.id;
+
+        const group = await Group.findById(groupId);
+        if (!group) return res.status(404).json({ success: false, message: "Group not found" });
+
+        // Remove the user from members
+        group.members = group.members.filter(m => m.toString() !== userId.toString());
+
+        // If no members left, delete group and messages
+        if (group.members.length === 0) {
+            await Group.findByIdAndDelete(groupId);
+            await GroupMessage.deleteMany({ groupId });
+            io.to(`group:${groupId}`).emit("groupDeleted", groupId);
+            return res.json({ success: true, message: "Left group and group deleted as no members remain" });
+        }
+
+        // If the leaving user was the creator, transfer ownership to first member
+        if (group.createdBy.toString() === userId.toString()) {
+            group.createdBy = group.members[0];
+        }
+
+        await group.save();
+
+        io.to(`group:${groupId}`).emit("groupUpdated", { groupId, members: group.members });
+        io.to(userId).emit("leftGroup", { groupId });
+
+        return res.json({ success: true, group });
+    } catch (err) {
+        console.error("leaveGroup error:", err);
+        return res.status(500).json({ success: false, message: "Server error" });
+    }
+};

@@ -15,7 +15,7 @@ const meetingRoutes = require("./routes/meeting.js");
 const groupRoutes = require("./routes/group.js");
 const { app, server } = require("./config/socketio.js");
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 // const __dirname = path.resolve();
 
 app.use(express.json());

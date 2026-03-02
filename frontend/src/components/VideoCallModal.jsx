@@ -232,6 +232,9 @@ export default function VideoCallModal() {
 // Helper component for remote video to manage its own ref
 function RemoteVideo({ stream, userId }) {
     const videoRef = useRef(null);
+    const users = useChatStore(state => state.users);
+    const user = users.find(u => String(u._id) === String(userId));
+    const displayName = user ? (user.fullName || user.uniqueId) : `User ${userId.slice(-4)}`;
 
     useEffect(() => {
         if (videoRef.current && stream && videoRef.current.srcObject !== stream) {
@@ -251,7 +254,7 @@ function RemoteVideo({ stream, userId }) {
             />
             <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end">
                 <span className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-white text-sm font-medium border border-white/10">
-                    User {userId.slice(-4)}
+                    {displayName}
                 </span>
             </div>
         </div>

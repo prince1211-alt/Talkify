@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { Mail, Lock, LogIn, Loader2 } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+import { axiosInstance } from "../lib/axios";
 
 export default function Login() {
     const [formData, setFormData] = useState({
@@ -117,6 +119,7 @@ export default function Login() {
                                 <div className="mt-4 flex justify-end gap-2">
                                     <button onClick={() => setShowForgot(false)} className="px-3 py-1">Cancel</button>
                                     <button onClick={async () => {
+                                        if (!forgotEmail) { toast.error('Please enter your email'); return; }
                                         try {
                                             await axiosInstance.post('/auth/forgot-password', { email: forgotEmail });
                                             setForgotStep(2);
@@ -135,6 +138,7 @@ export default function Login() {
                                 <div className="mt-4 flex justify-end gap-2">
                                     <button onClick={() => { setShowForgot(false); setForgotStep(1); }} className="px-3 py-1">Cancel</button>
                                     <button onClick={async () => {
+                                        if (!otp || !newPassword) { toast.error('OTP and new password are required'); return; }
                                         try {
                                             await axiosInstance.post('/auth/reset-password', { email: forgotEmail, otp, newPassword });
                                             toast.success('Password reset successful. Please login.');
