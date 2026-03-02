@@ -13,6 +13,7 @@ export default function ChatWindow() {
         selectedUser,
         selectedGroup,
         sendMessage,
+        deleteMessage,
         deleteGroup,
         isMessagesLoading,
         socket,
@@ -25,6 +26,7 @@ export default function ChatWindow() {
 
     const [text, setText] = useState("");
     const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
+    const fileInputRef = useRef(null);
 
     useEffect(() => {
         if (selectedUser?._id) {
@@ -43,6 +45,26 @@ export default function ChatWindow() {
         if (!text.trim()) return;
         await sendMessage({ text: text.trim() });
         setText("");
+    };
+
+    const handleImageClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const form = new FormData();
+            form.append("image", file);
+            if (text.trim()) form.append("text", text.trim());
+            await sendMessage(form);
+            setText("");
+        } catch (err) {
+            console.error("send image error:", err);
+        } finally {
+            e.target.value = null;
+        }
     };
 
     const handleVideoCall = () => {
@@ -176,12 +198,17 @@ export default function ChatWindow() {
             {/* Message Input */}
             <div className="bg-white px-6 py-4 border-t border-gray-100">
                 <form onSubmit={handleSendMessage} className="flex gap-3">
-                    <button
-                        type="button"
-                        className="p-3 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
-                    >
-                        <Image className="w-5 h-5" />
-                    </button>
+                    <>
+                        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+                        <button
+                            type="button"
+                            onClick={handleImageClick}
+                            className="p-3 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
+                            title="Attach image"
+                        >
+                            <Image className="w-5 h-5" />
+                        </button>
+                    </>
                     <input
                         type="text"
                         value={text}

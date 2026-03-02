@@ -37,21 +37,54 @@ export const useChatStore = create((set, get) => ({
         });
 
         socket.on("newMessage", (newMessage) => {
-            const { selectedUser, messages } = get();
-            if (newMessage.senderId === selectedUser?._id || newMessage.receiverId === selectedUser?._id) {
+            const { selectedUser, messages, users } = get();
+
+            const isForCurrent = newMessage.senderId === selectedUser?._id || newMessage.receiverId === selectedUser?._id;
+            if (isForCurrent) {
                 // Prevent duplication for the sender
                 if (messages.some(m => m._id === newMessage._id)) return;
                 set({ messages: [...messages, newMessage] });
+                return;
             }
+
+            // Increment unread for the corresponding user
+            const updated = users.map(u => {
+                if (u._id === newMessage.senderId || u._id === newMessage.receiverId) {
+                    return { ...u, unread: (u.unread || 0) + 1 };
+                }
+                return u;
+            });
+            set({ users: updated });
         });
 
         socket.on("newGroupMessage", (message) => {
-            const { selectedGroup, messages } = get();
+            const { selectedGroup, messages, groups } = get();
             if (message.groupId === selectedGroup?._id) {
                 // Prevent duplication for the sender
                 if (messages.some(m => m._id === message._id)) return;
                 set({ messages: [...messages, message] });
+                return;
             }
+
+            // increment unread for group
+            const updatedGroups = groups.map(g => {
+                if (g._id === message.groupId) {
+                    return { ...g, unread: (g.unread || 0) + 1 };
+                }
+                return g;
+            });
+            set({ groups: updatedGroups });
+        });
+
+        socket.on("messageDeleted", (payload) => {
+            const { messages } = get();
+            const messageId = payload?.messageId || payload?.id;
+            if (!messageId) return;
+            const updated = messages.map(m => {
+                if ((m._id || m.id) === messageId) return { ...m, deleted: true };
+                return m;
+            });
+            set({ messages: updated });
         });
 
         // 🔹 WebRTC Signaling Listeners
@@ -103,7 +136,9 @@ export const useChatStore = create((set, get) => ({
         set({ isUsersLoading: true });
         try {
             const res = await axiosInstance.get("/messages/users");
-            set({ users: res.data });
+            // initialize unread counter for each user
+            const usersWithUnread = res.data.map(u => ({ ...u, unread: 0 }));
+            set({ users: usersWithUnread });
         } catch (error) {
             console.error("getUsers error:", error);
         } finally {
@@ -115,7 +150,9 @@ export const useChatStore = create((set, get) => ({
         set({ isGroupsLoading: true });
         try {
             const res = await axiosInstance.get("/groups/my");
-            set({ groups: res.data });
+            // initialize unread counter for groups
+            const groupsWithUnread = res.data.map(g => ({ ...g, unread: 0 }));
+            set({ groups: groupsWithUnread });
             // Automatically join socket rooms for all groups
             const socket = get().socket;
             if (socket) {
@@ -167,6 +204,23 @@ export const useChatStore = create((set, get) => ({
         }
     },
 
+    deleteMessage: async (messageId) => {
+        const { selectedGroup, messages } = get();
+        try {
+            if (selectedGroup) {
+                await axiosInstance.delete(`/groups/${selectedGroup._id}/messages/${messageId}`);
+            } else {
+                await axiosInstance.delete(`/messages/${messageId}`);
+            }
+            // mark locally as deleted
+            const updated = messages.map(m => (m._id === messageId ? { ...m, deleted: true } : m));
+            set({ messages: updated });
+        } catch (err) {
+            console.error("deleteMessage error:", err);
+            throw err;
+        }
+    },
+
     createGroup: async (groupData) => {
         try {
             const res = await axiosInstance.post("/groups/create", groupData);
@@ -194,6 +248,26 @@ export const useChatStore = create((set, get) => ({
         }
     },
 
-    setSelectedUser: (user) => set({ selectedUser: user, selectedGroup: null, messages: [] }),
-    setSelectedGroup: (group) => set({ selectedGroup: group, selectedUser: null, messages: [] }),
+    setSelectedUser: async (user) => {
+        set({ selectedUser: user, selectedGroup: null, messages: [] });
+        if (!user) return;
+        // fetch messages and clear unread
+        await get().getMessages(user._id);
+        // mark as read on server
+        try {
+            await axiosInstance.post(`/messages/${user._id}/mark-read`);
+        } catch (err) {
+            // ignore mark-read errors
+        }
+        // reset unread locally
+        set({ users: get().users.map(u => u._id === user._id ? { ...u, unread: 0 } : u) });
+    },
+
+    setSelectedGroup: async (group) => {
+        set({ selectedGroup: group, selectedUser: null, messages: [] });
+        if (!group) return;
+        await get().getGroupMessages(group._id);
+        // reset unread locally
+        set({ groups: get().groups.map(g => g._id === group._id ? { ...g, unread: 0 } : g) });
+    },
 }));
