@@ -248,6 +248,41 @@ export const useChatStore = create((set, get) => ({
         }
     },
 
+    removeMember: async (groupId, memberId) => {
+        try {
+            const res = await axiosInstance.delete(`/groups/${groupId}/members/${memberId}`);
+            // update local group list and selectedGroup if applicable
+            const updatedGroups = get().groups.map(g => g._id === groupId ? res.data.group : g);
+            set({ groups: updatedGroups });
+            if (get().selectedGroup?._id === groupId) {
+                set({ selectedGroup: res.data.group });
+            }
+            toast.success('Member removed');
+        } catch (err) {
+            console.error('removeMember error:', err);
+            toast.error(err.response?.data?.message || 'Failed to remove member');
+        }
+    },
+
+    leaveGroup: async (groupId) => {
+        try {
+            const res = await axiosInstance.post(`/groups/${groupId}/leave`);
+            // if current user left, remove group from list and clear selection
+            const myId = useAuthStore.getState().authUser?._id;
+            const stillMember = (res.data.group && res.data.group.members || []).some(m => m._id === myId || m === myId);
+            if (!stillMember) {
+                set({ groups: get().groups.filter(g => g._id !== groupId), selectedGroup: null, messages: [] });
+            } else {
+                // update group
+                set({ groups: get().groups.map(g => g._id === groupId ? res.data.group : g), selectedGroup: res.data.group });
+            }
+            toast.success('Left group');
+        } catch (err) {
+            console.error('leaveGroup error:', err);
+            toast.error(err.response?.data?.message || 'Failed to leave group');
+        }
+    },
+
     setSelectedUser: async (user) => {
         set({ selectedUser: user, selectedGroup: null, messages: [] });
         if (!user) return;
