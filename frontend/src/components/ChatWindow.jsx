@@ -146,13 +146,19 @@ export default function ChatWindow() {
                         <Video className="w-5 h-5" />
                     </button>
 
+                    {selectedGroup && (
+                        <button onClick={() => setIsMembersModalOpen(true)}>
+                            <Info className="w-5 h-5" />
+                        </button>
+                    )}
+
                     {isCreator && (
                         <button onClick={handleDeleteGroup}>
                             <Trash2 className="w-5 h-5 text-red-500" />
                         </button>
                     )}
 
-                    <MoreVertical className="w-5 h-5" />
+                    {!selectedGroup && <MoreVertical className="w-5 h-5" />}
                 </div>
             </div>
 

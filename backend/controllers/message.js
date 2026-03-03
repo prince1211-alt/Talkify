@@ -18,10 +18,12 @@ exports.getUsersForSidebar = async (req, res) => {
   try {
     const myId = req.user._id || req.user.id;
 
-    const users = await User.find({ _id: { $ne: myId } })
-      .select("-password");
+    const me = await User.findById(myId).populate({
+      path: "contacts",
+      select: "-password"
+    });
 
-    res.json(users);
+    res.json(me.contacts);
 
   } catch (err) {
     res.status(500).json({ message: "Server error" });
@@ -77,6 +79,54 @@ exports.sendMessage = async (req, res) => {
       text,
       image: imageUrl,
     });
+
+    // Auto-add each user to the other's contacts (if not already there)
+    // This lets the receiver see the sender in their sidebar without manually adding them
+    const [sender, receiver] = await Promise.all([
+      User.findById(senderId),
+      User.findById(receiverId),
+    ]);
+
+    let senderUpdated = false;
+    let receiverUpdated = false;
+
+    if (sender && !sender.contacts.includes(receiverId)) {
+      sender.contacts.push(receiverId);
+      await sender.save();
+      senderUpdated = true;
+    }
+
+    if (receiver && !receiver.contacts.includes(senderId)) {
+      receiver.contacts.push(senderId);
+      await receiver.save();
+      receiverUpdated = true;
+    }
+
+    // If receiver's contacts were updated, notify them via socket so sidebar refreshes
+    if (receiverUpdated) {
+      io.to(receiverId.toString()).emit("contactAdded", {
+        user: {
+          _id: sender._id,
+          fullName: sender.fullName,
+          uniqueId: sender.uniqueId,
+          profilePic: sender.profilePic,
+          status: sender.status,
+        }
+      });
+    }
+
+    // Also notify sender if they didn't have receiver in contacts
+    if (senderUpdated) {
+      io.to(senderId.toString()).emit("contactAdded", {
+        user: {
+          _id: receiver._id,
+          fullName: receiver.fullName,
+          uniqueId: receiver.uniqueId,
+          profilePic: receiver.profilePic,
+          status: receiver.status,
+        }
+      });
+    }
 
     // Emit to both sender and receiver (all their tabs)
     io.to(senderId).to(receiverId).emit("newMessage", message);

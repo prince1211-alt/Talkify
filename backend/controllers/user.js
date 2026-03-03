@@ -133,7 +133,9 @@ exports.login = async (req, res) => {
       })
     }
 
-    const user = await User.findOne({ uniqueId })
+    const user = await User.findOne({
+      $or: [{ email: uniqueId }, { uniqueId: uniqueId }]
+    });
 
     if (!user) {
       return res.status(401).json({
@@ -254,6 +256,42 @@ exports.resetPassword = async (req, res) => {
     return res.json({ success: true, message: "Password reset successfully" });
   } catch (err) {
     console.error("resetPassword error:", err);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// ============================
+// 🔹 ADD CONTACT
+// ============================
+exports.addContact = async (req, res) => {
+  try {
+    const { uniqueId } = req.body;
+    const myId = req.user._id || req.user.id;
+
+    if (!uniqueId) {
+      return res.status(400).json({ success: false, message: "Unique ID is required" });
+    }
+
+    const targetUser = await User.findOne({ uniqueId });
+    if (!targetUser) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    if (targetUser._id.toString() === myId.toString()) {
+      return res.status(400).json({ success: false, message: "You cannot add yourself" });
+    }
+
+    const me = await User.findById(myId);
+    if (me.contacts.includes(targetUser._id)) {
+      return res.status(400).json({ success: false, message: "User is already in your contacts" });
+    }
+
+    me.contacts.push(targetUser._id);
+    await me.save();
+
+    return res.status(200).json({ success: true, message: "Contact added successfully", targetUser });
+  } catch (err) {
+    console.error("addContact error:", err);
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };
