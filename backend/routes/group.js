@@ -6,20 +6,25 @@ const {
     getMyGroups,
     getGroupMessages,
     sendGroupMessage,
-    deleteGroup,
     deleteGroupMessage,
+    deleteGroup,
     removeMember,
     leaveGroup,
+    addMember
 } = require("../controllers/group");
 const upload = require("../config/multer");
 
+// Group routes
 router.post("/create", auth, createGroup);
-router.get("/my", auth, getMyGroups);
+router.get("/my-groups", auth, getMyGroups);
 router.get("/:groupId/messages", auth, getGroupMessages);
 router.post("/:groupId/send", auth, upload.single("image"), sendGroupMessage);
-router.delete("/:groupId", auth, deleteGroup);
 router.delete("/:groupId/messages/:messageId", auth, deleteGroupMessage);
-router.delete("/:groupId/members/:memberId", auth, removeMember);
+router.delete("/:groupId", auth, deleteGroup);
+
+// Member management
+router.delete("/:groupId/remove/:memberId", auth, removeMember);
 router.post("/:groupId/leave", auth, leaveGroup);
+router.post("/:groupId/add", auth, addMember);
 
 module.exports = router;

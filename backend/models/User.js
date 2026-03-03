@@ -32,10 +32,17 @@ const userSchema = new mongoose.Schema(
       default: "offline"
     },
 
-    profilePic:{
-      type:String,
-      default:""
-    }
+    profilePic: {
+      type: String,
+      default: ""
+    },
+
+    contacts: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      }
+    ]
   },
   { timestamps: true }
 );

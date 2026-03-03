@@ -2,6 +2,7 @@ import { useEffect, useState, memo } from "react";
 import { useChatStore } from "../store/useChatStore";
 import { Users, Search, Plus, MessageSquare } from "lucide-react";
 import CreateGroupModal from "./CreateGroupModal";
+import AddContactModal from "./AddContactModal";
 import { useAuthStore } from "../store/useAuthStore";
 
 export default function Sidebar({ className = "" }) {
@@ -15,6 +16,7 @@ export default function Sidebar({ className = "" }) {
 
     const [searchTerm, setSearchTerm] = useState("");
     const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+    const [isAddContactModalOpen, setIsAddContactModalOpen] = useState(false);
     const { authUser } = useAuthStore();
 
     useEffect(() => {
@@ -23,11 +25,11 @@ export default function Sidebar({ className = "" }) {
     }, [getUsers, getGroups]);
 
     const filteredUsers = users
-    .filter(user => user._id !== authUser?._id)  
-    .filter(user =>
-        user.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.uniqueId.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+        .filter(user => user._id !== authUser?._id)
+        .filter(user =>
+            user.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            user.uniqueId.toLowerCase().includes(searchTerm.toLowerCase())
+        );
 
     const filteredGroups = groups.filter(group =>
         group.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -91,8 +93,8 @@ export default function Sidebar({ className = "" }) {
                                 key={group._id}
                                 onClick={() => setSelectedGroup(group)}
                                 className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${selectedGroup?._id === group._id
-                                        ? "bg-indigo-50 border border-indigo-100 shadow-sm"
-                                        : "hover:bg-gray-50 border border-transparent"
+                                    ? "bg-indigo-50 border border-indigo-100 shadow-sm"
+                                    : "hover:bg-gray-50 border border-transparent"
                                     }`}
                             >
                                 <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-bold shadow-indigo-100 shadow-lg shrink-0">
@@ -117,7 +119,15 @@ export default function Sidebar({ className = "" }) {
 
                 {/* Direct Messages Section */}
                 <div>
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider px-2 mb-2">Private Messages</h3>
+                    <div className="flex items-center justify-between px-2 mb-2">
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Private Messages</h3>
+                        <button
+                            onClick={() => setIsAddContactModalOpen(true)}
+                            className="p-1 text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                        >
+                            <Plus className="w-4 h-4" />
+                        </button>
+                    </div>
                     <div className="space-y-1">
                         {filteredUsers.map((user) => (
                             <UserItem
@@ -138,6 +148,10 @@ export default function Sidebar({ className = "" }) {
             <CreateGroupModal
                 isOpen={isGroupModalOpen}
                 onClose={() => setIsGroupModalOpen(false)}
+            />
+            <AddContactModal
+                isOpen={isAddContactModalOpen}
+                onClose={() => setIsAddContactModalOpen(false)}
             />
         </div>
     );

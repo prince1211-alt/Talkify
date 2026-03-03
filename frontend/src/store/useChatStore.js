@@ -36,6 +36,14 @@ export const useChatStore = create((set, get) => ({
             set({ onlineUsers: userIds });
         });
 
+        socket.on("contactAdded", ({ user }) => {
+            const { users } = get();
+            const alreadyExists = users.some(u => u._id === user._id);
+            if (!alreadyExists) {
+                set({ users: [...users, { ...user, unread: 0 }] });
+            }
+        });
+
         socket.on("newMessage", (newMessage) => {
             const { selectedUser, messages, users } = get();
 
@@ -125,6 +133,47 @@ export const useChatStore = create((set, get) => ({
                 toast.error("Group has been deleted");
             }
         });
+
+        socket.on("groupUpdated", ({ groupId, members }) => {
+            const { groups, selectedGroup } = get();
+            const updatedGroups = groups.map(g => {
+                if (g._id === groupId) {
+                    return { ...g, members };
+                }
+                return g;
+            });
+            set({ groups: updatedGroups });
+            if (selectedGroup?._id === groupId) {
+                set({ selectedGroup: { ...selectedGroup, members } });
+            }
+        });
+
+        socket.on("addedToGroup", (group) => {
+            const { groups } = get();
+            const alreadyIn = groups.some(g => g._id === group._id);
+            if (!alreadyIn) {
+                set({ groups: [...groups, { ...group, unread: 0 }] });
+                socket.emit("joinGroup", group._id);
+                toast.success(`You were added to group: ${group.name}`);
+            }
+        });
+
+        socket.on("removedFromGroup", ({ groupId }) => {
+            const { groups, selectedGroup } = get();
+            set({ groups: groups.filter(g => g._id !== groupId) });
+            if (selectedGroup?._id === groupId) {
+                set({ selectedGroup: null, messages: [] });
+                toast.error("You were removed from the group");
+            }
+        });
+
+        socket.on("leftGroup", ({ groupId }) => {
+            const { groups, selectedGroup } = get();
+            set({ groups: groups.filter(g => g._id !== groupId) });
+            if (selectedGroup?._id === groupId) {
+                set({ selectedGroup: null, messages: [] });
+            }
+        });
     },
 
     disconnectSocket: () => {
@@ -149,7 +198,7 @@ export const useChatStore = create((set, get) => ({
     getGroups: async () => {
         set({ isGroupsLoading: true });
         try {
-            const res = await axiosInstance.get("/groups/my");
+            const res = await axiosInstance.get("/groups/my-groups");
             // initialize unread counter for groups
             const groupsWithUnread = res.data.map(g => ({ ...g, unread: 0 }));
             set({ groups: groupsWithUnread });
@@ -250,7 +299,7 @@ export const useChatStore = create((set, get) => ({
 
     removeMember: async (groupId, memberId) => {
         try {
-            const res = await axiosInstance.delete(`/groups/${groupId}/members/${memberId}`);
+            const res = await axiosInstance.delete(`/groups/${groupId}/remove/${memberId}`);
             // update local group list and selectedGroup if applicable
             const updatedGroups = get().groups.map(g => g._id === groupId ? res.data.group : g);
             set({ groups: updatedGroups });
@@ -280,6 +329,36 @@ export const useChatStore = create((set, get) => ({
         } catch (err) {
             console.error('leaveGroup error:', err);
             toast.error(err.response?.data?.message || 'Failed to leave group');
+        }
+    },
+
+    addContact: async (uniqueId) => {
+        try {
+            await axiosInstance.post("/auth/add-contact", { uniqueId });
+            toast.success("Contact added successfully");
+            await get().getUsers();
+            return true;
+        } catch (error) {
+            console.error("addContact error:", error);
+            toast.error(error.response?.data?.message || "Failed to add contact");
+            return false;
+        }
+    },
+
+    addGroupMember: async (groupId, uniqueId) => {
+        try {
+            const res = await axiosInstance.post(`/groups/${groupId}/add`, { uniqueId });
+            const updatedGroups = get().groups.map(g => g._id === groupId ? res.data.group : g);
+            set({ groups: updatedGroups });
+            if (get().selectedGroup?._id === groupId) {
+                set({ selectedGroup: res.data.group });
+            }
+            toast.success("Member added");
+            return true;
+        } catch (error) {
+            console.error("addGroupMember error:", error);
+            toast.error(error.response?.data?.message || "Failed to add member");
+            return false;
         }
     },
 

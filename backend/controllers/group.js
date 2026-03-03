@@ -262,3 +262,52 @@ exports.leaveGroup = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error" });
     }
 };
+
+// ============================
+// ADD MEMBER TO GROUP
+// ============================
+exports.addMember = async (req, res) => {
+    try {
+        const { groupId } = req.params;
+        const { uniqueId } = req.body;
+        const userId = req.user._id || req.user.id;
+
+        if (!uniqueId) {
+            return res.status(400).json({ success: false, message: "Member uniqueId is required" });
+        }
+
+        const group = await Group.findById(groupId);
+        if (!group) return res.status(404).json({ success: false, message: "Group not found" });
+
+        // Only creator or admin can add others
+        if (group.createdBy.toString() !== userId.toString() && !req.user.isAdmin) {
+            return res.status(403).json({ success: false, message: "Not authorized to add members" });
+        }
+
+        const newMember = await User.findOne({ uniqueId });
+        if (!newMember) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        // Check if already in group
+        if (group.members.includes(newMember._id)) {
+            return res.status(400).json({ success: false, message: "User is already in the group" });
+        }
+
+        group.members.push(newMember._id);
+        await group.save();
+
+        const populatedGroup = await Group.findById(groupId).populate("members", "-password");
+
+        // Notify group room of updated members
+        io.to(`group:${groupId}`).emit("groupUpdated", { groupId, members: populatedGroup.members });
+
+        // Notify added member directly
+        io.to(newMember._id.toString()).emit("addedToGroup", populatedGroup);
+
+        return res.json({ success: true, group: populatedGroup });
+    } catch (err) {
+        console.error("addMember error:", err);
+        return res.status(500).json({ success: false, message: "Server error" });
+    }
+};
