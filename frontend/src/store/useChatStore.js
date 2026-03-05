@@ -370,7 +370,7 @@ export const useChatStore = create((set, get) => ({
         // mark as read on server
         try {
             await axiosInstance.post(`/messages/${user._id}/mark-read`);
-        } catch (err) {
+        } catch {
             // ignore mark-read errors
         }
         // reset unread locally
