@@ -46,20 +46,44 @@ export default function VideoCallModal() {
         if (!localStream) return;
         recordedChunksRef.current = [];
         const options = { mimeType: 'audio/webm' };
+
         try {
-            const streamToRecord = new MediaStream(localStream.getAudioTracks());
+            // 1. Initialize AudioContext
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const audioCtx = new AudioContext();
+
+            // 2. Create destination node
+            const dest = audioCtx.createMediaStreamDestination();
+
+            // 3. Add local audio to destination
+            if (localStream.getAudioTracks().length > 0) {
+                const localSource = audioCtx.createMediaStreamSource(
+                    new MediaStream([localStream.getAudioTracks()[0]])
+                );
+                localSource.connect(dest);
+            }
+
+            // 4. Add all remote audio to destination
             Object.values(remoteStreams).forEach(remoteStream => {
                 if (remoteStream.getAudioTracks().length > 0) {
-                    streamToRecord.addTrack(remoteStream.getAudioTracks()[0]);
+                    const remoteSource = audioCtx.createMediaStreamSource(
+                        new MediaStream([remoteStream.getAudioTracks()[0]])
+                    );
+                    remoteSource.connect(dest);
                 }
             });
 
-            mediaRecorderRef.current = new MediaRecorder(streamToRecord, options);
+            // 5. Use the mixed destination stream for MediaRecorder
+            mediaRecorderRef.current = new MediaRecorder(dest.stream, options);
             mediaRecorderRef.current.ondataavailable = (e) => {
                 if (e.data.size > 0) {
                     recordedChunksRef.current.push(e.data);
                 }
             };
+
+            // Keep a reference to the audio context to close it later
+            mediaRecorderRef.current.audioCtx = audioCtx;
+
             mediaRecorderRef.current.start();
             setIsRecording(true);
         } catch (e) {
@@ -82,9 +106,15 @@ export default function VideoCallModal() {
                         headers: { "Content-Type": "multipart/form-data" }
                     });
 
-                    if (res.data.success && socket) {
-                        // Broadcast summary to everyone
-                        socket.emit("broadcastGroupSummary", res.data.summary);
+                    if (res.data.success) {
+                        // 1. Send the summary as a message in the current chat
+                        const summaryText = `🤖 **Meeting Summary:**\n\n${res.data.summary}`;
+                        useChatStore.getState().sendMessage({ text: summaryText });
+
+                        // 2. Broadcast summary to everyone (if needed)
+                        if (socket) {
+                            socket.emit("broadcastGroupSummary", res.data.summary);
+                        }
                     }
                 } catch (error) {
                     console.error("Failed to summarize meeting:", error);
@@ -92,6 +122,10 @@ export default function VideoCallModal() {
                 } finally {
                     setIsUploading(false);
                     setIsRecording(false);
+                    // Close audio context
+                    if (mediaRecorderRef.current?.audioCtx) {
+                        mediaRecorderRef.current.audioCtx.close();
+                    }
                 }
             };
 
@@ -112,7 +146,8 @@ export default function VideoCallModal() {
         console.log(`Sending end-call to: ${target}`);
 
         if (target) {
-            socket?.emit("webrtc:end-call", {
+            const eventName = selectedGroup ? "webrtc:leave-call" : "webrtc:end-call";
+            socket?.emit(eventName, {
                 to: target,
                 groupId: selectedGroup?._id
             });
@@ -233,7 +268,13 @@ export default function VideoCallModal() {
 function RemoteVideo({ stream, userId }) {
     const videoRef = useRef(null);
     const users = useChatStore(state => state.users);
-    const user = users.find(u => String(u._id) === String(userId));
+    const selectedGroup = useChatStore(state => state.selectedGroup);
+
+    let user = users.find(u => String(u._id) === String(userId));
+    if (!user && selectedGroup) {
+        user = selectedGroup.members.find(m => String(m._id) === String(userId));
+    }
+
     const displayName = user ? (user.fullName || user.uniqueId) : `User ${userId.slice(-4)}`;
 
     useEffect(() => {

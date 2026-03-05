@@ -19,36 +19,98 @@ export const useCallStore = create((set, get) => ({
     setLocalStream: (stream) => set({ localStream: stream }),
 
     initializeCall: async () => {
-        try {
-            console.log("Initializing media devices (ULTRA optimization 480p/15fps)...");
-            const constraints = {
-                video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } },
-                audio: { echoCancellation: true, noiseSuppression: true }
-            };
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            set({ localStream: stream, isVideoMuted: false, isAudioMuted: false });
-            return stream;
-        } catch (error) {
-            console.error("Error accessing video+audio:", error);
+    if (!navigator?.mediaDevices?.getUserMedia) {
+        toast.error("Media devices not supported in this browser");
+        return null;
+    }
 
-            // Fallback to Audio Only if Video is busy (NotReadableError)
-            if (error.name === "NotReadableError" || error.name === "TrackStartError") {
-                toast.error("Camera is busy. Joining with Audio only.");
-                try {
-                    console.log("Attempting Audio-only fallback...");
-                    const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    set({ localStream: audioStream, isVideoMuted: true, isAudioMuted: false });
-                    return audioStream;
-                } catch (audioError) {
-                    console.error("Audio-only fallback failed:", audioError);
-                    toast.error("Could not access microphone.");
-                    return null;
-                }
-            }
+    const stopExistingStream = (stream) => {
+        if (!stream) return;
+        stream.getTracks().forEach(track => track.stop());
+    };
 
-            toast.error("Could not access camera/microphone");
-            return null;
+    try {
+        console.log("Initializing media devices (480p / 15fps optimized)");
+
+        const videoConstraints = {
+        width: { ideal: 640 },
+        height: { ideal: 480 },
+        frameRate: { ideal: 15, max: 20 }
+        };
+
+        const constraints = {
+        video: videoConstraints,
+        audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
         }
+        };
+
+        let stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+        set({
+        localStream: stream,
+        isVideoMuted: false,
+        isAudioMuted: false
+        });
+
+        return stream;
+
+    } catch (error) {
+        console.warn("Video+Audio failed:", error.name);
+
+        // 🔽 Try lower video quality before removing video
+        if (error.name === "OverconstrainedError") {
+        try {
+            console.log("Retrying with lower video constraints...");
+
+            const lowVideoStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 320, height: 240, frameRate: 10 },
+            audio: true
+            });
+
+            set({
+            localStream: lowVideoStream,
+            isVideoMuted: false,
+            isAudioMuted: false
+            });
+
+            return lowVideoStream;
+
+        } catch (retryError) {
+            console.warn("Low video retry failed:", retryError.name);
+        }
+        }
+
+        // 🔽 Final fallback → Audio only
+        try {
+        console.log("Falling back to audio-only mode...");
+
+        const audioStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+            }
+        });
+
+        set({
+            localStream: audioStream,
+            isVideoMuted: true,
+            isAudioMuted: false
+        });
+
+        toast.error("Camera unavailable. Joined with audio only.");
+
+        return audioStream;
+
+        } catch (audioError) {
+        console.error("Audio fallback failed:", audioError);
+        toast.error("Unable to access microphone.");
+        return null;
+        }
+    }
     },
 
     toggleLocalVideo: async () => {
@@ -162,6 +224,44 @@ export const useCallStore = create((set, get) => ({
             isVideoMuted: false,
             isAudioMuted: false
         });
+    },
+
+    removeUserFromCall: (userId) => {
+        console.log(`Removing user ${userId} from call...`);
+        const { remoteStreams, peerConnections, activeCallParticipants } = get();
+
+        // 1. Stop their remote tracks
+        const stream = remoteStreams[userId];
+        if (stream && stream.getTracks) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+
+        // 2. Close their PeerConnection
+        const pc = peerConnections[userId];
+        if (pc) {
+            pc.close();
+        }
+
+        // 3. Remove them from state
+        const updatedRemoteStreams = { ...remoteStreams };
+        delete updatedRemoteStreams[userId];
+
+        const updatedPeerConnections = { ...peerConnections };
+        delete updatedPeerConnections[userId];
+
+        const updatedParticipants = activeCallParticipants.filter(id => id !== userId);
+
+        set({
+            remoteStreams: updatedRemoteStreams,
+            peerConnections: updatedPeerConnections,
+            activeCallParticipants: updatedParticipants,
+        });
+
+        // 4. If no one else is in the call and we didn't just start it, end it fully
+        if (updatedParticipants.length === 0 && Object.keys(updatedPeerConnections).length === 0) {
+            console.log("No participants left in call. Ending full call.");
+            get().endCall();
+        }
     },
 
     createPeerConnection: (userId, socket) => {

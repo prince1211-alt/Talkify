@@ -125,6 +125,14 @@ export const useChatStore = create((set, get) => ({
             console.log("Call ended signal received");
             useCallStore.getState().endCall();
         });
+
+        socket.on("webrtc:user-left", (data) => {
+            console.log("User left call signal received:", data);
+            if (data.from) {
+                useCallStore.getState().removeUserFromCall(data.from);
+            }
+        });
+
         socket.on("groupDeleted", (groupId) => {
             const { groups, selectedGroup } = get();
             set({ groups: groups.filter(g => g._id !== groupId) });

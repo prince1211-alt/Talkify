@@ -58,6 +58,20 @@ const registerWebRTCEvents = (io, socket, userSocketMap) => {
     }
   });
 
+  // 🔹 8️⃣ Leave Call (Individual)
+  socket.on("webrtc:leave-call", ({ to, groupId }) => {
+    const from = socket.handshake.query.userId;
+    console.log(`[WebRTC] Leave-call signal from ${from}. Target: ${to}, Group: ${groupId || "none"}`);
+
+    if (to === "all" && groupId) {
+      // Broadcast to the entire group room except sender
+      socket.to(`group:${groupId}`).emit("webrtc:user-left", { from });
+    } else if (to) {
+      // Individual notification
+      io.to(to).emit("webrtc:user-left", { from });
+    }
+  });
+
 };
 
 module.exports = {
