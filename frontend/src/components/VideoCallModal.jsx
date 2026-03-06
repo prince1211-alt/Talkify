@@ -28,7 +28,6 @@ export default function VideoCallModal() {
 
     useEffect(() => {
         if (localVideoRef.current && localStream && localVideoRef.current.srcObject !== localStream) {
-            console.log("Attaching new local stream to video element.");
             localVideoRef.current.srcObject = localStream;
         }
     }, [localStream]);
@@ -134,7 +133,6 @@ export default function VideoCallModal() {
     };
 
     const handleEndCall = () => {
-        console.log("Handle end call clicked");
         if (isRecording) {
             stopRecordingAndUpload();
         }
@@ -142,8 +140,6 @@ export default function VideoCallModal() {
         // Robust target selection: use stored targetUserId, or fallback to first remote stream
         const fallbackId = Object.keys(remoteStreams)[0];
         const target = selectedGroup ? "all" : (targetUserId || fallbackId);
-
-        console.log(`Sending end-call to: ${target}`);
 
         if (target) {
             const eventName = selectedGroup ? "webrtc:leave-call" : "webrtc:end-call";
@@ -279,7 +275,6 @@ function RemoteVideo({ stream, userId }) {
 
     useEffect(() => {
         if (videoRef.current && stream && videoRef.current.srcObject !== stream) {
-            console.log(`Attaching remote stream for user ${userId}`);
             videoRef.current.srcObject = stream;
         }
     }, [stream, userId]);

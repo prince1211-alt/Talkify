@@ -177,12 +177,10 @@ export const useChatStore = create((set, get) => ({
         });
 
         socket.on("webrtc:call-ended", () => {
-            console.log("Call ended signal received");
             useCallStore.getState().endCall();
         });
 
         socket.on("webrtc:user-left", (data) => {
-            console.log("User left call signal received:", data);
             if (data.from) {
                 useCallStore.getState().removeUserFromCall(data.from);
             }
