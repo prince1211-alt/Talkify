@@ -193,7 +193,7 @@ exports.deleteMessage = async (req, res) => {
 
 
 // ============================
-// 🔹 MARK MESSAGES AS READ
+// 🔹 MARK MESSAGES AS READ   not in use right now
 // ============================
 exports.markMessagesRead = async (req, res) => {
   try {
