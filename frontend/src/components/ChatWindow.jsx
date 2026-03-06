@@ -26,6 +26,7 @@ export default function ChatWindow() {
 
     const [text, setText] = useState("");
     const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
+    const [isUploadingImage, setIsUploadingImage] = useState(false);
     const fileInputRef = useRef(null);
 
     useEffect(() => {
@@ -51,13 +52,36 @@ export default function ChatWindow() {
         fileInputRef.current?.click();
     };
 
+    const compressImage = (file) => new Promise((resolve) => {
+        const MAX_SIZE = 800;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const img = new window.Image();
+            img.onload = () => {
+                let { width, height } = img;
+                if (width > MAX_SIZE || height > MAX_SIZE) {
+                    if (width > height) { height = Math.round(height * MAX_SIZE / width); width = MAX_SIZE; }
+                    else { width = Math.round(width * MAX_SIZE / height); height = MAX_SIZE; }
+                }
+                const canvas = document.createElement("canvas");
+                canvas.width = width; canvas.height = height;
+                canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+                canvas.toBlob((blob) => resolve(new File([blob], file.name, { type: "image/jpeg" })), "image/jpeg", 0.7);
+            };
+            img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+
     const handleFileChange = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        setIsUploadingImage(true);
         try {
+            const compressed = await compressImage(file);
             const form = new FormData();
-            form.append("image", file);
+            form.append("image", compressed);
             if (text.trim()) form.append("text", text.trim());
             await sendMessage(form);
             setText("");
@@ -65,6 +89,7 @@ export default function ChatWindow() {
             toast.error("Failed to send image");
             console.error(err);
         } finally {
+            setIsUploadingImage(false);
             e.target.value = null;
         }
     };
@@ -195,8 +220,21 @@ export default function ChatWindow() {
                         className="hidden"
                     />
 
-                    <button className="px-2 bg-green-400 rounded-md " type="button" onClick={handleImageClick}>
-                        <Image className="w-5 h-5" />
+                    <button
+                        className="px-2 bg-green-400 rounded-md relative"
+                        type="button"
+                        onClick={handleImageClick}
+                        disabled={isUploadingImage}
+                        title={isUploadingImage ? "Uploading..." : "Send image"}
+                    >
+                        {isUploadingImage ? (
+                            <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                            </svg>
+                        ) : (
+                            <Image className="w-5 h-5" />
+                        )}
                     </button>
 
                     <input

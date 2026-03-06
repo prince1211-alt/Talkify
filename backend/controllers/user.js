@@ -60,8 +60,10 @@ exports.signup = async (req, res) => {
       email,
       password,
       otp,
+      publicKey,
+      encryptedPrivateKey,
     } = req.body
-    if (!fullName || !uniqueId || !email || !password || !otp) {
+    if (!fullName || !uniqueId || !email || !password || !otp || !publicKey || !encryptedPrivateKey) {
       return res.status(403).send({
         success: false,
         message: "All Fields are required",
@@ -99,6 +101,8 @@ exports.signup = async (req, res) => {
       uniqueId,
       email,
       password: hashedPassword,
+      publicKey,
+      encryptedPrivateKey,
     })
 
     const token = jwt.sign(
@@ -282,6 +286,10 @@ exports.addContact = async (req, res) => {
     }
 
     const me = await User.findById(myId);
+    if (!me) {
+      return res.status(404).json({ success: false, message: "Current user not found. Please log in again." });
+    }
+
     if (me.contacts.includes(targetUser._id)) {
       return res.status(400).json({ success: false, message: "User is already in your contacts" });
     }

@@ -61,7 +61,7 @@ exports.sendMessage = async (req, res) => {
   try {
     const senderId = req.user._id || req.user.id;
     const receiverId = req.params.id;
-    const { text } = req.body;
+    const { text, encryptedKeyForSender, encryptedKeyForReceiver, iv } = req.body;
 
     let imageUrl = "";
 
@@ -77,6 +77,9 @@ exports.sendMessage = async (req, res) => {
       senderId,
       receiverId,
       text,
+      encryptedKeyForSender,
+      encryptedKeyForReceiver,
+      iv,
       image: imageUrl,
     });
 
@@ -138,6 +141,19 @@ exports.sendMessage = async (req, res) => {
   }
 };
 
+// ============================
+// 🔹 GET USER PUBLIC KEY
+// ============================
+exports.getPublicKey = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const user = await User.findById(userId).select("publicKey");
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json({ publicKey: user.publicKey });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
 
 // ============================
 // 🔹 DELETE MESSAGE (soft)
