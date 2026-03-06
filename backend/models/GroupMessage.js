@@ -20,6 +20,15 @@ const groupMessageSchema = new mongoose.Schema(
             type: String,
             default: "",
         },
+        encryptedKeysMap: {
+            type: Map,
+            of: String,
+            default: {},
+        },
+        iv: {
+            type: String,
+            default: "",
+        },
         image: {
             type: String,
             default: "",

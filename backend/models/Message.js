@@ -17,6 +17,22 @@ const messageSchema = new mongoose.Schema(
     text: {
       type: String,
       trim: true,
+      default: "",
+    },
+
+    encryptedKeyForSender: {
+      type: String,
+      default: "",
+    },
+
+    encryptedKeyForReceiver: {
+      type: String,
+      default: "",
+    },
+
+    iv: {
+      type: String,
+      default: "",
     },
 
     image: {
@@ -27,7 +43,7 @@ const messageSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    
+
     deleted: {
       type: Boolean,
       default: false,

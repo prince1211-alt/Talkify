@@ -61,42 +61,46 @@ export default function SignUp() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+        <div className="min-h-screen bg-[linear-gradient(to_right_top,#092b5c,#005f99,#0095a5,#00c677,#a8eb12)] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
             <div className="sm:mx-auto sm:w-full sm:max-w-md">
-                <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                    Create an account
+                <h2 className="mt-6 text-center text-3xl font-bold text-gray-900
+                bg-gradient-to-tr from-[#8fb038] via-[#bf9a00] to-[#eb7912] 
+                bg-clip-text text-transparent">
+                    Create Account on Talkify
                 </h2>
             </div>
 
             <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-                <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 border border-gray-100">
+                <div className="bg-[#AACEBA] py-8 px-4 shadow-lg shadow-black/70 sm:rounded-lg sm:px-10 border border-black border-opacity-50">
                     <form className="space-y-6" onSubmit={handleSubmit}>
 
                         {/* Full Name */}
                         <InputField
                             label="Full Name"
+                            labelClassName="text-white"
                             name="fullName"
                             type="text"
                             value={formData.fullName}
                             onChange={handleChange}
-                            placeholder="John Doe"
+                            placeholder="Enter your full name"
                             icon={<User className="h-5 w-5 text-gray-400" />}
                         />
 
                         {/* Unique ID */}
                         <InputField
-                            label="Unique ID / Username"
+                            label="User ID"
+                            labelClassName="text-white"
                             name="uniqueId"
                             type="text"
                             value={formData.uniqueId}
                             onChange={handleChange}
-                            placeholder="your_unique_id"
+                            placeholder="UserId"
                             icon={<User className="h-5 w-5 text-gray-400" />}
                         />
 
                         {/* Email + OTP */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">
+                            <label className="block text-sm font-medium text-white">
                                 Email address
                             </label>
                             <div className="mt-1 flex gap-2">
@@ -111,7 +115,7 @@ export default function SignUp() {
                                         value={formData.email}
                                         onChange={handleChange}
                                         className="block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 border bg-gray-50 outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                        placeholder="you@example.com"
+                                        placeholder="Enter your email"
                                     />
                                 </div>
 
@@ -129,17 +133,19 @@ export default function SignUp() {
                         {/* OTP */}
                         <InputField
                             label="OTP Code"
+                            labelClassName="text-white"
                             name="otp"
                             type="text"
                             value={formData.otp}
                             onChange={handleChange}
-                            placeholder="6-digit code"
+                            placeholder="Enter 6-digit code"
                             icon={<Lock className="h-5 w-5 text-gray-400" />}
                         />
 
                         {/* Password */}
                         <InputField
                             label="Password"
+                            labelClassName="text-white"
                             name="password"
                             type="password"
                             value={formData.password}
@@ -151,6 +157,7 @@ export default function SignUp() {
                         {/* Confirm Password */}
                         <InputField
                             label="Confirm Password"
+                            labelClassName="text-white"
                             name="confirmPassword"
                             type="password"
                             value={formData.confirmPassword}

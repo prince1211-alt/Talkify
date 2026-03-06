@@ -129,12 +129,12 @@ export default function ChatWindow() {
     }
 
     return (
-        <div className="flex-1 flex flex-col h-full bg-slate-50 relative">
+        <div className="flex-1 flex flex-col h-full bg- relative">
             {/* Header */}
-            <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
+            <div className="border-b px-6 py-4 flex items-center justify-between rounded-lg bg-[linear-gradient(to_right_top,#398187,#398187,#398187,#398187,#398187)] m-1">
                 <div>
-                    <h2 className="font-bold text-lg">{title}</h2>
-                    <p className="text-sm text-gray-500">
+                    <h2 className="font-bold text-black text-lg">{title}</h2>
+                    <p className="text-sm text-green-500">
                         {selectedGroup
                             ? `${selectedGroup.members.length} members`
                             : (isOnline ? "Online" : "Offline")}
@@ -143,7 +143,7 @@ export default function ChatWindow() {
 
                 <div className="flex gap-3">
                     <button onClick={handleVideoCall}>
-                        <Video className="w-5 h-5" />
+                        <Video className="w-5 h-5 " />
                     </button>
 
                     {selectedGroup && (
@@ -185,7 +185,7 @@ export default function ChatWindow() {
             </div>
 
             {/* Input */}
-            <div className="bg-white p-4 border-t">
+            <div className="bg-white p-3 border-t">
                 <form onSubmit={handleSendMessage} className="flex gap-3">
                     <input
                         ref={fileInputRef}
@@ -195,7 +195,7 @@ export default function ChatWindow() {
                         className="hidden"
                     />
 
-                    <button type="button" onClick={handleImageClick}>
+                    <button className="px-2 bg-green-400 rounded-md " type="button" onClick={handleImageClick}>
                         <Image className="w-5 h-5" />
                     </button>
 
@@ -207,7 +207,7 @@ export default function ChatWindow() {
                         placeholder="Type a message..."
                     />
 
-                    <button type="submit">
+                    <button className="px-2 bg-green-400 rounded-md" type="submit">
                         <Send className="w-5 h-5" />
                     </button>
                 </form>
@@ -260,7 +260,7 @@ const MessageBubble = memo(({ message, isOwn, isGroup }) => {
                         Message deleted
                     </div>
                 ) : (
-                    <div className={`p-3 rounded-lg ${isOwn ? "bg-indigo-600 text-white" : "bg-white border"}`}>
+                    <div className={`p-3 rounded-lg ${isOwn ? "bg-green-600 text-white" : "bg-white border"}`}>
                         {message.image && (
                             <img src={message.image} alt="attachment" className="mb-2 rounded" />
                         )}
