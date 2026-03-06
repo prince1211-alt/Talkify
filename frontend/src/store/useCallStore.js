@@ -30,8 +30,6 @@ export const useCallStore = create((set, get) => ({
         };
 
         try {
-            console.log("Initializing media devices (480p / 15fps optimized)");
-
             const videoConstraints = {
                 width: { ideal: 640 },
                 height: { ideal: 480 },
@@ -66,8 +64,6 @@ export const useCallStore = create((set, get) => ({
             // 🔽 Try lower video quality before removing video
             if (error.name === "OverconstrainedError") {
                 try {
-                    console.log("Retrying with lower video constraints...");
-
                     const lowVideoStream = await navigator.mediaDevices.getUserMedia({
                         video: { width: 320, height: 240, frameRate: 10 },
                         audio: true
@@ -88,8 +84,6 @@ export const useCallStore = create((set, get) => ({
 
             // 🔽 Final fallback → Audio only
             try {
-                console.log("Falling back to audio-only mode...");
-
                 const audioStream = await navigator.mediaDevices.getUserMedia({
                     audio: {
                         echoCancellation: true,
@@ -126,7 +120,6 @@ export const useCallStore = create((set, get) => ({
                 // STOP and disable to release hardware immediately
                 videoTrack.stop();
                 videoTrack.enabled = false;
-                console.log("Video track stopped (Hardware released)");
                 set({ isVideoMuted: true });
             } else {
                 try {
@@ -151,7 +144,6 @@ export const useCallStore = create((set, get) => ({
                     localStream.removeTrack(videoTrack);
                     localStream.addTrack(newVideoTrack);
                     set({ isVideoMuted: false });
-                    console.log("Video track re-acquired via replaceTrack (Zero Latency)");
                 } catch (err) {
                     console.error("Failed to re-acquire video:", err);
                     toast.error("Camera is busy.");
@@ -189,13 +181,11 @@ export const useCallStore = create((set, get) => ({
     },
 
     endCall: () => {
-        console.log("Ending call and cleaning up...");
         const { localStream, remoteStreams, peerConnections } = get();
 
         if (localStream) {
             localStream.getTracks().forEach((track) => {
                 track.stop();
-                console.log(`Stopped local track: ${track.kind} (RELEASING HARDWARE)`);
             });
         }
 
@@ -204,7 +194,6 @@ export const useCallStore = create((set, get) => ({
             if (stream && stream.getTracks) {
                 stream.getTracks().forEach(track => {
                     track.stop();
-                    console.log(`Stopped remote track: ${track.kind}`);
                 });
             }
         });
@@ -212,7 +201,6 @@ export const useCallStore = create((set, get) => ({
         // Close all P2P connections
         Object.entries(peerConnections).forEach(([userId, pc]) => {
             pc.close();
-            console.log(`Closed peer connection with ${userId}`);
         });
 
         set({
@@ -230,7 +218,6 @@ export const useCallStore = create((set, get) => ({
     },
 
     removeUserFromCall: (userId) => {
-        console.log(`Removing user ${userId} from call...`);
         const { remoteStreams, peerConnections, activeCallParticipants } = get();
 
         // 1. Stop their remote tracks
@@ -262,14 +249,12 @@ export const useCallStore = create((set, get) => ({
 
         // 4. If no one else is in the call and we didn't just start it, end it fully
         if (updatedParticipants.length === 0 && Object.keys(updatedPeerConnections).length === 0) {
-            console.log("No participants left in call. Ending full call.");
             get().endCall();
         }
     },
 
     createPeerConnection: (userId, socket) => {
         const { targetUserId, localStream } = get();
-        console.log(`Creating SUPER OPTIMIZED RTCPeerConnection for ${userId}`);
 
         const pc = new RTCPeerConnection({
             iceServers: [
@@ -312,7 +297,6 @@ export const useCallStore = create((set, get) => ({
                     }
                 }));
 
-                console.log(`[Negotiation] Creating offer for ${userId}...`);
                 const offer = await pc.createOffer();
                 const limitedOffer = setBitrate(offer.sdp, 400);
                 await pc.setLocalDescription({ type: 'offer', sdp: limitedOffer });
@@ -336,7 +320,6 @@ export const useCallStore = create((set, get) => ({
         };
 
         pc.ontrack = (event) => {
-            console.log(`Received remote track (${event.track.kind}) from ${userId}`);
             set((state) => {
                 const currentStream = state.remoteStreams[userId] || new MediaStream();
                 if (!currentStream.getTracks().find(t => t.id === event.track.id)) {
@@ -351,7 +334,6 @@ export const useCallStore = create((set, get) => ({
 
         pc.oniceconnectionstatechange = () => {
             const state = pc.iceConnectionState;
-            console.log(`ICE Connection State [${userId}]: ${state}`);
 
             if (state === "failed") {
                 console.warn("ICE Failed. Attempting restart...");
@@ -360,7 +342,6 @@ export const useCallStore = create((set, get) => ({
                 setTimeout(() => {
                     const currentPc = get().peerConnections[userId];
                     if (currentPc && currentPc.iceConnectionState === "disconnected") {
-                        console.log("Auto-Restaring ICE due to disconnection...");
                         pc.restartIce();
                     }
                 }, 3000);
@@ -429,7 +410,6 @@ export const useCallStore = create((set, get) => ({
         const ignoreOffer = !nState.polite && offerCollision;
 
         if (ignoreOffer) {
-            console.log(`[PerfectNeg] Ignoring collide offer from ${data.from}`);
             return;
         }
 
