@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { axiosInstance } from "../lib/axios";
 import toast from "react-hot-toast";
+import { generateRSAKeyPair, encryptPrivateKeyWithPassword, decryptPrivateKeyWithPassword } from "../utils/crypto";
 
 export const useAuthStore = create((set) => ({
     authUser: JSON.parse(localStorage.getItem("chat-user")) || null,
@@ -17,10 +18,15 @@ export const useAuthStore = create((set) => ({
     signup: async (data) => {
         set({ isSigningUp: true });
         try {
-            const res = await axiosInstance.post("/auth/signUp", data);
+            const { publicKeyStr, privateKeyStr } = await generateRSAKeyPair();
+            const encryptedPrivateKey = await encryptPrivateKeyWithPassword(privateKeyStr, data.password);
+
+            const signupData = { ...data, publicKey: publicKeyStr, encryptedPrivateKey };
+
+            const res = await axiosInstance.post("/auth/signUp", signupData);
             const user = res.data.user;
             const token = res.data.token || user.token;
-            const authUserData = { ...user, token };
+            const authUserData = { ...user, token, privateKeyStr };
 
             localStorage.setItem("chat-user", JSON.stringify(authUserData));
             set({ authUser: authUserData });
@@ -41,7 +47,20 @@ export const useAuthStore = create((set) => ({
             const res = await axiosInstance.post("/auth/login", data);
             const user = res.data.user;
             const token = res.data.token || user.token;
-            const authUserData = { ...user, token };
+
+            let privateKeyStr = "";
+            if (user.encryptedPrivateKey) {
+                try {
+                    privateKeyStr = await decryptPrivateKeyWithPassword(user.encryptedPrivateKey, data.password);
+                } catch (err) {
+                    console.error("Failed to decrypt private key:", err);
+                    toast.error("Decryption failed. Incorrect password or corrupted keys.");
+                    set({ isLoggingIn: false });
+                    return false;
+                }
+            }
+
+            const authUserData = { ...user, token, privateKeyStr };
 
             localStorage.setItem("chat-user", JSON.stringify(authUserData));
             set({ authUser: authUserData });

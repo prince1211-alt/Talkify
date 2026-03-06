@@ -19,98 +19,101 @@ export const useCallStore = create((set, get) => ({
     setLocalStream: (stream) => set({ localStream: stream }),
 
     initializeCall: async () => {
-    if (!navigator?.mediaDevices?.getUserMedia) {
-        toast.error("Media devices not supported in this browser");
-        return null;
-    }
-
-    const stopExistingStream = (stream) => {
-        if (!stream) return;
-        stream.getTracks().forEach(track => track.stop());
-    };
-
-    try {
-        console.log("Initializing media devices (480p / 15fps optimized)");
-
-        const videoConstraints = {
-        width: { ideal: 640 },
-        height: { ideal: 480 },
-        frameRate: { ideal: 15, max: 20 }
-        };
-
-        const constraints = {
-        video: videoConstraints,
-        audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
+        if (!navigator?.mediaDevices?.getUserMedia) {
+            toast.error("Media devices not supported in this browser");
+            return null;
         }
+
+        const stopExistingStream = (stream) => {
+            if (!stream) return;
+            stream.getTracks().forEach(track => track.stop());
         };
 
-        let stream = await navigator.mediaDevices.getUserMedia(constraints);
-
-        set({
-        localStream: stream,
-        isVideoMuted: false,
-        isAudioMuted: false
-        });
-
-        return stream;
-
-    } catch (error) {
-        console.warn("Video+Audio failed:", error.name);
-
-        // 🔽 Try lower video quality before removing video
-        if (error.name === "OverconstrainedError") {
         try {
-            console.log("Retrying with lower video constraints...");
+            console.log("Initializing media devices (480p / 15fps optimized)");
 
-            const lowVideoStream = await navigator.mediaDevices.getUserMedia({
-            video: { width: 320, height: 240, frameRate: 10 },
-            audio: true
-            });
+            const videoConstraints = {
+                width: { ideal: 640 },
+                height: { ideal: 480 },
+                frameRate: { ideal: 15, max: 20 }
+            };
+
+            const constraints = {
+                video: videoConstraints,
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    sampleRate: 48000,
+                    channelCount: 1,
+                    sampleSize: 16
+                }
+            };
+
+            let stream = await navigator.mediaDevices.getUserMedia(constraints);
 
             set({
-            localStream: lowVideoStream,
-            isVideoMuted: false,
-            isAudioMuted: false
+                localStream: stream,
+                isVideoMuted: false,
+                isAudioMuted: false
             });
 
-            return lowVideoStream;
+            return stream;
 
-        } catch (retryError) {
-            console.warn("Low video retry failed:", retryError.name);
-        }
-        }
+        } catch (error) {
+            console.warn("Video+Audio failed:", error.name);
 
-        // 🔽 Final fallback → Audio only
-        try {
-        console.log("Falling back to audio-only mode...");
+            // 🔽 Try lower video quality before removing video
+            if (error.name === "OverconstrainedError") {
+                try {
+                    console.log("Retrying with lower video constraints...");
 
-        const audioStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
+                    const lowVideoStream = await navigator.mediaDevices.getUserMedia({
+                        video: { width: 320, height: 240, frameRate: 10 },
+                        audio: true
+                    });
+
+                    set({
+                        localStream: lowVideoStream,
+                        isVideoMuted: false,
+                        isAudioMuted: false
+                    });
+
+                    return lowVideoStream;
+
+                } catch (retryError) {
+                    console.warn("Low video retry failed:", retryError.name);
+                }
             }
-        });
 
-        set({
-            localStream: audioStream,
-            isVideoMuted: true,
-            isAudioMuted: false
-        });
+            // 🔽 Final fallback → Audio only
+            try {
+                console.log("Falling back to audio-only mode...");
 
-        toast.error("Camera unavailable. Joined with audio only.");
+                const audioStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
 
-        return audioStream;
+                set({
+                    localStream: audioStream,
+                    isVideoMuted: true,
+                    isAudioMuted: false
+                });
 
-        } catch (audioError) {
-        console.error("Audio fallback failed:", audioError);
-        toast.error("Unable to access microphone.");
-        return null;
+                toast.error("Camera unavailable. Joined with audio only.");
+
+                return audioStream;
+
+            } catch (audioError) {
+                console.error("Audio fallback failed:", audioError);
+                toast.error("Unable to access microphone.");
+                return null;
+            }
         }
-    }
     },
 
     toggleLocalVideo: async () => {
@@ -272,10 +275,28 @@ export const useCallStore = create((set, get) => ({
             iceServers: [
                 { urls: "stun:stun.l.google.com:19302" },
                 { urls: "stun:stun1.l.google.com:19302" },
+                { urls: "stun:stun2.l.google.com:19302" },
+                { urls: "stun:stun3.l.google.com:19302" },
+                // TURN relay - needed when both peers are behind strict NAT
+                {
+                    urls: "turn:openrelay.metered.ca:80",
+                    username: "openrelayproject",
+                    credential: "openrelayproject"
+                },
+                {
+                    urls: "turn:openrelay.metered.ca:443",
+                    username: "openrelayproject",
+                    credential: "openrelayproject"
+                },
+                {
+                    urls: "turn:openrelay.metered.ca:443?transport=tcp",
+                    username: "openrelayproject",
+                    credential: "openrelayproject"
+                },
             ],
             bundlePolicy: "max-bundle",
             rtcpMuxPolicy: "require",
-            iceCandidatePoolSize: 0,
+            iceCandidatePoolSize: 8,
         });
 
         // The receiver is polite, the caller (who has targetUserId set) is impolite
@@ -476,15 +497,60 @@ export const useCallStore = create((set, get) => ({
 /**
  * Super Optimization: SDP Munger for Extreme Bitrate Control
  */
-function setBitrate(sdp, bitrate) {
+function setBitrate(sdp, videoBitrate) {
     const lines = sdp.split("\r\n");
     const newLines = [];
+    let inAudioSection = false;
+    let inVideoSection = false;
+    const opusPayloads = [];
+
+    // First pass: find Opus payload numbers
     lines.forEach(line => {
-        newLines.push(line);
-        if (line.indexOf("m=video") === 0) {
-            newLines.push("b=AS:" + bitrate);
-            newLines.push("b=TIAS:" + (bitrate * 1000));
+        if (line.startsWith("m=audio")) inAudioSection = true;
+        if (line.startsWith("m=video")) inAudioSection = false;
+        if (inAudioSection) {
+            const match = line.match(/^a=rtpmap:(\d+) opus/i);
+            if (match) opusPayloads.push(match[1]);
         }
     });
+
+    // Second pass: inject bandwidth + Opus quality params
+    inAudioSection = false;
+    inVideoSection = false;
+    const patchedOpus = new Set();
+
+    lines.forEach(line => {
+        if (line.startsWith("m=audio")) { inAudioSection = true; inVideoSection = false; }
+        if (line.startsWith("m=video")) { inVideoSection = true; inAudioSection = false; }
+
+        // For Opus fmtp lines, replace with enhanced params
+        if (inAudioSection && line.startsWith("a=fmtp:")) {
+            const m = line.match(/^a=fmtp:(\d+)/);
+            if (m && opusPayloads.includes(m[1])) {
+                newLines.push(`a=fmtp:${m[1]} minptime=10;useinbandfec=1;stereo=0;maxaveragebitrate=128000;cbr=0`);
+                patchedOpus.add(m[1]);
+                return;
+            }
+        }
+
+        newLines.push(line);
+
+        if (inAudioSection && line.startsWith("m=audio")) {
+            newLines.push("b=AS:128");
+            newLines.push("b=TIAS:128000");
+        }
+        if (inVideoSection && line.startsWith("m=video")) {
+            newLines.push("b=AS:" + videoBitrate);
+            newLines.push("b=TIAS:" + (videoBitrate * 1000));
+        }
+    });
+
+    // If no fmtp line existed for Opus, inject one at end
+    opusPayloads.forEach(payload => {
+        if (!patchedOpus.has(payload)) {
+            newLines.push(`a=fmtp:${payload} minptime=10;useinbandfec=1;stereo=0;maxaveragebitrate=128000;cbr=0`);
+        }
+    });
+
     return newLines.join("\r\n");
 }

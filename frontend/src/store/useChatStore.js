@@ -4,8 +4,50 @@ import { useAuthStore } from "./useAuthStore";
 import { useCallStore } from "./useCallStore";
 import { io } from "socket.io-client";
 import toast from "react-hot-toast";
+import {
+    generateAESKey, encryptAESMessage, decryptAESMessage,
+    encryptAESKeyWithRSA, decryptAESKeyWithRSA,
+    importRSAPublicKey, importRSAPrivateKey
+} from "../utils/crypto";
 
 const BASE_URL = import.meta.env.MODE === "development" ? "http://localhost:5000" : "/";
+
+const decryptMessageObj = async (msg) => {
+    if (msg.deleted || !msg.text || !msg.iv) return msg;
+
+    const authUser = useAuthStore.getState().authUser;
+    if (!authUser || !authUser.privateKeyStr) return msg;
+
+    try {
+        const rsaPriv = await importRSAPrivateKey(authUser.privateKeyStr);
+        let encryptedAesKeyStr = null;
+
+        const myId = authUser._id || authUser.id;
+        if (msg.groupId) {
+            encryptedAesKeyStr = msg.encryptedKeysMap?.[myId];
+        } else {
+            if (msg.senderId?._id === myId || msg.senderId === myId) {
+                encryptedAesKeyStr = msg.encryptedKeyForSender;
+            } else if (msg.receiverId === myId) {
+                encryptedAesKeyStr = msg.encryptedKeyForReceiver;
+            }
+        }
+
+        if (!encryptedAesKeyStr) return msg;
+
+        const aesKey = await decryptAESKeyWithRSA(encryptedAesKeyStr, rsaPriv);
+        const plaintext = await decryptAESMessage(msg.text, msg.iv, aesKey);
+
+        return { ...msg, text: plaintext };
+    } catch (err) {
+        console.error("Failed to decrypt message:", msg._id, err);
+        return { ...msg, text: "[Decryption Failed]" };
+    }
+};
+
+const decryptMessagesArray = async (messages) => {
+    return await Promise.all(messages.map(m => decryptMessageObj(m)));
+};
 
 export const useChatStore = create((set, get) => ({
     messages: [],
@@ -44,20 +86,25 @@ export const useChatStore = create((set, get) => ({
             }
         });
 
-        socket.on("newMessage", (newMessage) => {
+        socket.on("newMessage", async (newMessage) => {
             const { selectedUser, messages, users } = get();
+            const myId = useAuthStore.getState().authUser?._id;
 
-            const isForCurrent = newMessage.senderId === selectedUser?._id || newMessage.receiverId === selectedUser?._id;
+            // If we already have this message locally (sender's copy), skip
+            if (messages.some(m => m._id?.toString() === newMessage._id?.toString())) return;
+
+            // Don't try to decrypt our own sent messages — we already added them with plaintext
+            const decryptedMsg = newMessage.senderId === myId ? newMessage : await decryptMessageObj(newMessage);
+
+            const isForCurrent = decryptedMsg.senderId === selectedUser?._id || decryptedMsg.receiverId === selectedUser?._id;
             if (isForCurrent) {
-                // Prevent duplication for the sender
-                if (messages.some(m => m._id === newMessage._id)) return;
-                set({ messages: [...messages, newMessage] });
+                set({ messages: [...messages, decryptedMsg] });
                 return;
             }
 
             // Increment unread for the corresponding user
             const updated = users.map(u => {
-                if (u._id === newMessage.senderId || u._id === newMessage.receiverId) {
+                if (u._id === decryptedMsg.senderId || u._id === decryptedMsg.receiverId) {
                     return { ...u, unread: (u.unread || 0) + 1 };
                 }
                 return u;
@@ -65,12 +112,20 @@ export const useChatStore = create((set, get) => ({
             set({ users: updated });
         });
 
-        socket.on("newGroupMessage", (message) => {
+        socket.on("newGroupMessage", async (message) => {
             const { selectedGroup, messages, groups } = get();
-            if (message.groupId === selectedGroup?._id) {
-                // Prevent duplication for the sender
-                if (messages.some(m => m._id === message._id)) return;
-                set({ messages: [...messages, message] });
+            const myId = useAuthStore.getState().authUser?._id;
+
+            // If we already have this message locally (sender's copy), skip
+            if (messages.some(m => m._id?.toString() === message._id?.toString())) return;
+
+            // Don't re-decrypt our own messages — we already added them with plaintext
+            const decryptedMsg = (message.senderId === myId || message.senderId?.toString() === myId)
+                ? message
+                : await decryptMessageObj(message);
+
+            if (String(decryptedMsg.groupId) === String(selectedGroup?._id)) {
+                set({ messages: [...messages, decryptedMsg] });
                 return;
             }
 
@@ -226,7 +281,8 @@ export const useChatStore = create((set, get) => ({
         set({ isMessagesLoading: true });
         try {
             const res = await axiosInstance.get(`/messages/${userId}`);
-            set({ messages: res.data });
+            const decryptedMessages = await decryptMessagesArray(res.data);
+            set({ messages: decryptedMessages });
         } catch (error) {
             console.error("getMessages error:", error);
         } finally {
@@ -238,7 +294,8 @@ export const useChatStore = create((set, get) => ({
         set({ isMessagesLoading: true });
         try {
             const res = await axiosInstance.get(`/groups/${groupId}/messages`);
-            set({ messages: res.data });
+            const decryptedMessages = await decryptMessagesArray(res.data);
+            set({ messages: decryptedMessages });
         } catch (error) {
             console.error("getGroupMessages error:", error);
         } finally {
@@ -249,15 +306,99 @@ export const useChatStore = create((set, get) => ({
     sendMessage: async (messageData) => {
         const { selectedUser, selectedGroup, messages } = get();
         try {
+            const authUser = useAuthStore.getState().authUser;
             let res;
-            if (selectedGroup) {
-                res = await axiosInstance.post(`/groups/${selectedGroup._id}/send`, messageData);
-            } else {
-                res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, messageData);
+
+            // ── Image-only (FormData) path — no E2EE needed for images ──
+            if (messageData instanceof FormData) {
+                if (selectedGroup) {
+                    res = await axiosInstance.post(
+                        `/groups/${selectedGroup._id}/send`,
+                        messageData,
+                        { headers: { "Content-Type": "multipart/form-data" } }
+                    );
+                } else {
+                    res = await axiosInstance.post(
+                        `/messages/send/${selectedUser._id}`,
+                        messageData,
+                        { headers: { "Content-Type": "multipart/form-data" } }
+                    );
+                }
+                set({ messages: [...messages, res.data] });
+                return;
             }
-            set({ messages: [...messages, res.data] });
+
+            // ── Text message (E2EE) path ──
+            if (selectedGroup) {
+                const keysRes = await axiosInstance.get(`/groups/${selectedGroup._id}/keys`);
+                const keysMapStr = keysRes.data.keysMap;
+
+                const aesKey = await generateAESKey();
+
+                let ciphertext = "";
+                let iv = "";
+                if (messageData.text) {
+                    const enc = await encryptAESMessage(messageData.text, aesKey);
+                    ciphertext = enc.ciphertextStr;
+                    iv = enc.ivStr;
+                }
+
+                const encryptedKeysMap = {};
+                for (const memberId of Object.keys(keysMapStr)) {
+                    if (keysMapStr[memberId]) {
+                        const rsaPub = await importRSAPublicKey(keysMapStr[memberId]);
+                        encryptedKeysMap[memberId] = await encryptAESKeyWithRSA(aesKey, rsaPub);
+                    }
+                }
+
+                const payload = { ...messageData, text: ciphertext, iv, encryptedKeysMap };
+                res = await axiosInstance.post(`/groups/${selectedGroup._id}/send`, payload);
+            } else {
+                const keyRes = await axiosInstance.get(`/messages/keys/${selectedUser._id}`);
+                const receiverPubKeyStr = keyRes.data.publicKey;
+                const senderPubKeyStr = authUser.publicKey;
+
+                const aesKey = await generateAESKey();
+
+                let ciphertext = "";
+                let iv = "";
+                if (messageData.text) {
+                    const enc = await encryptAESMessage(messageData.text, aesKey);
+                    ciphertext = enc.ciphertextStr;
+                    iv = enc.ivStr;
+                }
+
+                let encryptedKeyForReceiver = "";
+                if (receiverPubKeyStr) {
+                    const receiverRsaPub = await importRSAPublicKey(receiverPubKeyStr);
+                    encryptedKeyForReceiver = await encryptAESKeyWithRSA(aesKey, receiverRsaPub);
+                }
+
+                let encryptedKeyForSender = "";
+                if (senderPubKeyStr) {
+                    const senderRsaPub = await importRSAPublicKey(senderPubKeyStr);
+                    encryptedKeyForSender = await encryptAESKeyWithRSA(aesKey, senderRsaPub);
+                }
+
+                const payload = {
+                    ...messageData,
+                    text: ciphertext,
+                    iv,
+                    encryptedKeyForReceiver,
+                    encryptedKeyForSender
+                };
+
+                res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, payload);
+            }
+
+            const sentMsg = res.data;
+            if (messageData.text) {
+                sentMsg.text = messageData.text; // Use plaintext for local display
+            }
+            set({ messages: [...messages, sentMsg] });
         } catch (error) {
             console.error("sendMessage error:", error);
+            toast.error("Failed to send message");
         }
     },
 

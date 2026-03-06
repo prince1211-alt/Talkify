@@ -2,6 +2,7 @@ const Group = require("../models/Group");
 const GroupMessage = require("../models/GroupMessage");
 const User = require("../models/User");
 const { io, getReceiverSocketId } = require("../config/socketio");
+const cloudinary = require("../config/cloudinary");
 
 // ============================
 // CREATE GROUP
@@ -91,7 +92,7 @@ exports.getGroupMessages = async (req, res) => {
 exports.sendGroupMessage = async (req, res) => {
     try {
         const { groupId } = req.params;
-        const { text } = req.body;
+        const { text, encryptedKeysMap, iv } = req.body;
         const userId = req.user._id || req.user.id;
 
         const user = await User.findById(userId);
@@ -107,22 +108,56 @@ exports.sendGroupMessage = async (req, res) => {
         let imageUrl = "";
         if (req.file) {
             const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
-            const upload = await require("../config/cloudinary").uploader.upload(dataUri);
+            const upload = await cloudinary.uploader.upload(dataUri);
             imageUrl = upload.secure_url || "";
         }
 
-        const message = await GroupMessage.create({ groupId, senderId, senderName, text, image: imageUrl });
+        const message = await GroupMessage.create({
+            groupId,
+            senderId,
+            senderName,
+            text,
+            encryptedKeysMap,
+            iv,
+            image: imageUrl
+        });
 
         // Emit to socket room for this group
-        io.to(`group:${groupId}`).emit("newGroupMessage", message);
+        // Convert to plain object so Mongoose Map serializes correctly for all clients
+        const messageObj = message.toObject();
+        // Convert the Mongoose Map to a plain object for socket emission
+        if (messageObj.encryptedKeysMap instanceof Map) {
+            messageObj.encryptedKeysMap = Object.fromEntries(messageObj.encryptedKeysMap);
+        }
+        io.to(`group:${groupId}`).emit("newGroupMessage", messageObj);
 
-        return res.status(201).json(message);
+        return res.status(201).json(messageObj);
     } catch (err) {
         console.error("sendGroupMessage error:", err);
         return res.status(500).json({ success: false, message: "Server error" });
     }
 };
 
+// ============================
+// GET GROUP PUBLIC KEYS
+// ============================
+exports.getGroupKeys = async (req, res) => {
+    try {
+        const { groupId } = req.params;
+        const group = await Group.findById(groupId).populate("members", "publicKey");
+        if (!group) return res.status(404).json({ success: false, message: "Group not found" });
+
+        const keysMap = {};
+        group.members.forEach(member => {
+            keysMap[member._id.toString()] = member.publicKey;
+        });
+
+        return res.json({ success: true, keysMap });
+    } catch (err) {
+        console.error("getGroupKeys error:", err);
+        return res.status(500).json({ success: false, message: "Server error" });
+    }
+};
 
 // ============================
 // DELETE GROUP MESSAGE (soft)

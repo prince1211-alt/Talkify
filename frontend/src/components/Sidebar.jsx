@@ -54,7 +54,7 @@ export default function Sidebar({ className = "" }) {
     }
 
     return (
-        <div className={`${className} bg-white flex flex-col h-full border-r border-gray-100`}>
+        <div className={`${className} bg-[#075e54] flex flex-col h-full border-r border-gray-100`}>
             {/* Header with Search */}
             <div className="p-6 border-b border-gray-100 space-y-4">
                 <div className="flex items-center justify-between">
