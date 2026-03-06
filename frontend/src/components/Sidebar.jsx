@@ -79,12 +79,12 @@ export default function Sidebar({ className = "" }) {
                 {/* Groups Section */}
                 <div>
                     <div className="flex items-center justify-between px-2 mb-2">
-                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Groups</h3>
+                        <h3 className="text-xs font-bold text-white uppercase tracking-wider">Groups</h3>
                         <button
                             onClick={() => setIsGroupModalOpen(true)}
                             className="p-1 text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
                         >
-                            <Plus className="w-4 h-4" />
+                            <Plus className="w-4 h-4 text-white" />
                         </button>
                     </div>
                     <div className="space-y-1">
@@ -112,7 +112,7 @@ export default function Sidebar({ className = "" }) {
                             </button>
                         ))}
                         {filteredGroups.length === 0 && (
-                            <p className="text-center py-4 text-xs text-gray-400">No groups found</p>
+                            <p className="text-center py-4 text-xs text-white">No groups found</p>
                         )}
                     </div>
                 </div>
@@ -120,12 +120,12 @@ export default function Sidebar({ className = "" }) {
                 {/* Direct Messages Section */}
                 <div>
                     <div className="flex items-center justify-between px-2 mb-2">
-                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Private Messages</h3>
+                        <h3 className="text-xs font-bold text-white uppercase tracking-wider">Private Messages</h3>
                         <button
                             onClick={() => setIsAddContactModalOpen(true)}
                             className="p-1 text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
                         >
-                            <Plus className="w-4 h-4" />
+                            <Plus className="w-4 h-4 text-white" />
                         </button>
                     </div>
                     <div className="space-y-1">
@@ -161,8 +161,8 @@ const UserItem = memo(({ user, isSelected, isOnline, onClick }) => (
     <button
         onClick={() => onClick(user)}
         className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${isSelected
-            ? "bg-indigo-50 border border-indigo-100 shadow-sm"
-            : "hover:bg-gray-50 border border-transparent"
+            ? "bg-[#128c7e]  shadow-sm"
+            : "hover:bg-[#054640] border border-transparent"
             }`}
     >
         <div className="relative shrink-0">
@@ -178,8 +178,8 @@ const UserItem = memo(({ user, isSelected, isOnline, onClick }) => (
             )}
         </div>
         <div className="text-left flex-1 min-w-0">
-            <p className="font-semibold text-gray-900 truncate">{user.fullName}</p>
-            <p className="text-xs text-gray-500 truncate">{user.uniqueId}</p>
+            <p className="font-semibold text-white truncate">{user.fullName}</p>
+            <p className="text-xs text-white truncate">{user.uniqueId}</p>
         </div>
         {user.unread > 0 && (
             <div className="pl-2">

@@ -37,6 +37,16 @@ const userSchema = new mongoose.Schema(
       default: ""
     },
 
+    publicKey: {
+      type: String,
+      default: ""
+    },
+
+    encryptedPrivateKey: {
+      type: String,
+      default: ""
+    },
+
     contacts: [
       {
         type: mongoose.Schema.Types.ObjectId,

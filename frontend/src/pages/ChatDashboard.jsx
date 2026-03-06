@@ -20,7 +20,7 @@ export default function ChatDashboard() {
     return (
         <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
             {/* Top Navigation */}
-            <nav className="bg-white shadow-sm border-b border-gray-200 px-4 py-3 flex justify-between items-center z-10">
+            <nav className="bg-[#075e54] shadow-sm border-b border-gray-200 px-4 py-3 flex justify-between items-center z-10">
                 <div className="flex items-center gap-2">
                     <div className="bg-indigo-600 p-2 rounded-lg">
                         <Users className="w-5 h-5 text-white" />
@@ -31,12 +31,12 @@ export default function ChatDashboard() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                    <span className="text-sm border border-gray-200 rounded-md px-3 py-1 font-medium text-gray-700 hidden sm:block">
+                    <span className="text-sm border border-gray-200 rounded-md px-3 py-1 font-medium text-black hidden sm:block bg-white">
                         {authUser?.fullName}
                     </span>
                     <button
                         onClick={logout}
-                        className="text-sm border border-gray-200 rounded-md px-3 py-1 font-medium text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors bg-gray-50"
+                        className="text-sm border border-black-200 rounded-md px-3 py-1 font-medium text-black hover:text-red-700 hover:bg-red-50 transition-colors bg-red-500"
                     >
                         Logout
                     </button>
@@ -46,7 +46,7 @@ export default function ChatDashboard() {
             {/* Main Content Area */}
             <div className="flex-1 flex overflow-hidden">
                 {/* Sidebar (List of users) */}
-                <Sidebar className="w-80 border-r border-gray-200 bg-white flex-shrink-0 hidden md:flex flex-col" />
+                <Sidebar className="w-80 border-r border-gray-200 bg-[#075e54] flex-shrink-0 hidden md:flex flex-col" />
 
                 {/* Chat Area */}
                 <div className="flex-1 flex flex-col bg-slate-50 relative">
