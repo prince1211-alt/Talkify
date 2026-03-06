@@ -1,0 +1,26 @@
+﻿git : To https://githu
+b.com/prince1211-alt/T
+alkify.git
+At line:1 char:39
++ ... uffer 
+524288000; git push 
+origin main 
+--force-with-lease 
+2>&1 | Out-F ...
++                     
+ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (To https:/   
+ /gith...alt/Talki    
+fy.git:String) []    
+, RemoteException
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+ + 1827358...2e49447 
+main -> main (forced 
+update)

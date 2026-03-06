@@ -28,8 +28,6 @@ const getReceiverSocketId = (userId) => {
 };
 
 io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
-
   const userId = socket.handshake.query.userId;
 
   if (userId) {
@@ -46,7 +44,6 @@ io.on("connection", (socket) => {
   // 🔹 Group Chat — join a group's socket room
   socket.on("joinGroup", (groupId) => {
     socket.join(`group:${groupId}`);
-    console.log(`Socket ${socket.id} joined group room: group:${groupId}`);
   });
 
   // 🔹 Group Chat — leave a group's socket room
@@ -55,7 +52,6 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.id);
     if (userId) {
       // Small delay to check if user has other sockets before removing from onlineUsers
       setTimeout(() => {

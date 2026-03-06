@@ -22,10 +22,9 @@ async function sendVerificationEmail(email, otp) {
 	try {
 		const mailResponse = await mailSender(
 			email,
-			"NexusChat Verification Email",
-			`<h1>Welcome to NexusChat!</h1><p>Your OTP for registration is: <b>${otp}</b></p>`
+			"Talkify Verification Email",
+			`<h1>Welcome to Talkify!</h1><p>Your OTP for registration is: <b>${otp}</b></p>`
 		);
-		console.log("Email sent successfully: ", mailResponse.response);
 	} catch (error) {
 		console.log("Error occurred while sending email: ", error);
 		throw error;
@@ -33,8 +32,6 @@ async function sendVerificationEmail(email, otp) {
 }
 
 OTPSchema.pre("save", async function () {
-	console.log("New document saved to database");
-
 	// Only send an email when a new document is created
 	if (this.isNew) {
 		await sendVerificationEmail(this.email, this.otp);

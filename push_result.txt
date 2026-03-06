@@ -1,0 +1,30 @@
+﻿git : error: RPC 
+failed; HTTP 408 curl 
+22 The requested URL 
+returned error: 408
+At line:1 char:1
++ git push origin 
+main 
+--force-with-lease 
+2>&1 | Out-File 
+-FilePath pus ...
++ ~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (error: RPC   
+  fail...rned erro    
+r: 408:String) []    
+, RemoteException
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+send-pack: unexpected 
+disconnect while 
+reading sideband 
+packet
+fatal: the remote end 
+hung up unexpectedly
+Everything up-to-date

@@ -8,7 +8,6 @@ const cloudinary = require("../config/cloudinary")
 
 exports.sendotp = async (req, res) => {
   try {
-    console.log("sendotp controller hit")
     const { email } = req.body
 
     const checkUserPresent = await User.findOne({ email })
@@ -38,8 +37,7 @@ exports.sendotp = async (req, res) => {
       result = await OTP.findOne({ otp });
     }
     const otpPayload = { email, otp }
-    const otpBody = await OTP.create(otpPayload)
-    console.log("OTP Body", otpBody)
+    await OTP.create(otpPayload)
     res.status(200).json({
       success: true,
       message: `OTP Sent Successfully`,
