@@ -23,7 +23,7 @@ export const useAuthStore = create((set) => ({
 
             const signupData = { ...data, publicKey: publicKeyStr, encryptedPrivateKey };
 
-            const res = await axiosInstance.post("/auth/signUp", signupData);
+            const res = await axiosInstance.post("/auth/signup", signupData);
             const user = res.data.user;
             const token = res.data.token || user.token;
             const authUserData = { ...user, token, privateKeyStr };
