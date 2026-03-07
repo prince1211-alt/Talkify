@@ -69,7 +69,7 @@ export const deriveKeyFromPassword = async (password, saltBuffer = new Uint8Arra
         {
             name: "PBKDF2",
             salt: saltBuffer,
-            iterations: 100000,
+            iterations: 10000,
             hash: "SHA-256"
         },
         keyMaterial,
