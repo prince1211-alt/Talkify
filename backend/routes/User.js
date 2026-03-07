@@ -9,6 +9,7 @@ const {
     addContact
 } = require("../controllers/user");
 
+router.post("/signup", signup)
 router.post("/signUp", signup)
 router.post("/login", login)
 router.post("/sendotp", sendotp)
