@@ -10,7 +10,7 @@ import {
     importRSAPublicKey, importRSAPrivateKey
 } from "../utils/crypto";
 
-const BASE_URL = import.meta.env.MODE === "development" ? "http://localhost:5000" : "/";
+const BASE_URL = import.meta.env.MODE === "development" ? "http://localhost:5000" : import.meta.env.VITE_BACKEND_URL;
 
 const decryptMessageObj = async (msg) => {
     if (msg.deleted || !msg.text || !msg.iv) return msg;

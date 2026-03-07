@@ -20,14 +20,22 @@ const PORT = process.env.PORT || 5001;
 
 app.use(express.json());
 app.use(cookieParser());
+const allowedOrigins = [
+  /^http:\/\/localhost:\d+$/,
+  process.env.FRONTEND_URL,
+].filter(Boolean);
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow any localhost port (handles Vite using 5173, 5174, 5175, etc.)
-      if (!origin || /^http:\/\/localhost:\d+$/.test(origin)) {
+      if (!origin) return callback(null, true);
+      const isAllowed = allowedOrigins.some((allowed) =>
+        allowed instanceof RegExp ? allowed.test(origin) : allowed === origin
+      );
+      if (isAllowed) {
         callback(null, true);
       } else {
-        callback(new Error('CORS not allowed'));
+        callback(new Error('CORS not allowed: ' + origin));
       }
     },
     credentials: true,
