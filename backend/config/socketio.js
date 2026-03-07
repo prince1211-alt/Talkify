@@ -9,13 +9,22 @@ const server = http.createServer(app);
 // 🔹 Store online users (userId -> socketId)
 const userSocketMap = new Map();
 
+const allowedSocketOrigins = [
+  /^http:\/\/localhost:\d+$/,
+  process.env.FRONTEND_URL,
+].filter(Boolean);
+
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
-      if (!origin || /^http:\/\/localhost:\d+$/.test(origin)) {
+      if (!origin) return callback(null, true);
+      const isAllowed = allowedSocketOrigins.some((allowed) =>
+        allowed instanceof RegExp ? allowed.test(origin) : allowed === origin
+      );
+      if (isAllowed) {
         callback(null, true);
       } else {
-        callback(new Error("CORS not allowed"));
+        callback(new Error("CORS not allowed: " + origin));
       }
     },
     credentials: true,
