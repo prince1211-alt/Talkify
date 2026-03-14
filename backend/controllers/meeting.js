@@ -11,7 +11,7 @@ exports.summarizeMeeting = async (req, res) => {
         if (!process.env.GROQ_API_KEY) {
             return res.status(500).json({
                 success: false,
-                message: "GROQ_API_KEY missing in .env file. Get free key at console.groq.com",
+                message: "GROQ_API_KEY missing in .env file.",
             });
         }
 

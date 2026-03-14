@@ -72,7 +72,7 @@ exports.getGroupMessages = async (req, res) => {
 
         // Map messages to ensure senderName is accurate even for old messages
         const mappedMessages = messages.map(msg => {
-            const doc = msg.toObject();
+            const doc = msg.toObject({ flattenMaps: true });
             if (doc.senderName === "Unknown" && msg.senderId) {
                 doc.senderName = msg.senderId.fullName || "Unknown";
             }
@@ -124,11 +124,7 @@ exports.sendGroupMessage = async (req, res) => {
 
         // Emit to socket room for this group
         // Convert to plain object so Mongoose Map serializes correctly for all clients
-        const messageObj = message.toObject();
-        // Convert the Mongoose Map to a plain object for socket emission
-        if (messageObj.encryptedKeysMap instanceof Map) {
-            messageObj.encryptedKeysMap = Object.fromEntries(messageObj.encryptedKeysMap);
-        }
+        const messageObj = message.toObject({ flattenMaps: true });
         io.to(`group:${groupId}`).emit("newGroupMessage", messageObj);
 
         return res.status(201).json(messageObj);

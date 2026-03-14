@@ -43,8 +43,8 @@ exports.sendotp = async (req, res) => {
       message: `OTP Sent Successfully`,
     })
   } catch (error) {
-    console.log(error.message)
-    return res.status(500).json({ success: false, error: error.message })
+    console.log("Error in sendotp:", error.message)
+    return res.status(500).json({ success: false, message: error.message })
   }
 }
 

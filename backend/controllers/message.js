@@ -12,7 +12,7 @@ const uploadBufferToCloudinary = async (file) => {
 };
 
 // ============================
-// 🔹 GET USERS (Sidebar)
+// GET USERS (Sidebar)
 // ============================
 exports.getUsersForSidebar = async (req, res) => {
   try {
@@ -32,7 +32,7 @@ exports.getUsersForSidebar = async (req, res) => {
 
 
 // ============================
-// 🔹 GET CHAT MESSAGES
+// GET CHAT MESSAGES
 // ============================
 exports.getMessages = async (req, res) => {
   try {
@@ -55,7 +55,7 @@ exports.getMessages = async (req, res) => {
 
 
 // ============================
-// 🔹 SEND MESSAGE
+// SEND MESSAGE
 // ============================
 exports.sendMessage = async (req, res) => {
   try {
@@ -142,7 +142,7 @@ exports.sendMessage = async (req, res) => {
 };
 
 // ============================
-// 🔹 GET USER PUBLIC KEY
+// GET USER PUBLIC KEY
 // ============================
 exports.getPublicKey = async (req, res) => {
   try {
@@ -156,7 +156,7 @@ exports.getPublicKey = async (req, res) => {
 };
 
 // ============================
-// 🔹 DELETE MESSAGE (soft)
+// DELETE MESSAGE (soft)
 // ============================
 exports.deleteMessage = async (req, res) => {
   try {
@@ -193,7 +193,7 @@ exports.deleteMessage = async (req, res) => {
 
 
 // ============================
-// 🔹 MARK MESSAGES AS READ   not in use right now
+//  MARK MESSAGES AS READ   not in use right now
 // ============================
 exports.markMessagesRead = async (req, res) => {
   try {
