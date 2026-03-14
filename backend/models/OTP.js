@@ -26,16 +26,16 @@ async function sendVerificationEmail(email, otp) {
 			`<h1>Welcome to Talkify!</h1><p>Your OTP for registration is: <b>${otp}</b></p>`
 		);
 	} catch (error) {
-		console.log("Error occurred while sending email: ", error);
 		throw error;
 	}
 }
 
 OTPSchema.pre("save", async function () {
-	// Only send an email when a new document is created
+
 	if (this.isNew) {
 		await sendVerificationEmail(this.email, this.otp);
 	}
+
 });
 
 const OTP = mongoose.model("OTP", OTPSchema);

@@ -20,6 +20,7 @@ const PORT = process.env.PORT || 5001;
 
 app.use(express.json());
 app.use(cookieParser());
+
 const allowedOrigins = [
   /^http:\/\/localhost:\d+$/,
   process.env.FRONTEND_URL,
