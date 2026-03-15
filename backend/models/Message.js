@@ -30,7 +30,8 @@ const messageSchema = new mongoose.Schema(
       default: "",
     },
 
-    iv: {
+    iv: { // initialisation vector -- Yeh ek random value hoti hai jo AES encryption ke start me use hoti hai
+    //  taaki same plaintext encrypt hone par bhi har baar different ciphertext mile
       type: String,
       default: "",
     },

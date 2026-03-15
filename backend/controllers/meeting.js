@@ -26,7 +26,7 @@ exports.summarizeMeeting = async (req, res) => {
         const newAudioPath = audioPath + ".webm";
         fs.renameSync(audioPath, newAudioPath);
 
-        // 🎙️ 1️⃣ Speech to Text using Groq Whisper (Auto-detects language)
+        // 🎙️ Speech to Text using Groq Whisper (Auto-detects language)
         const transcription = await groq.audio.transcriptions.create({
             file: fs.createReadStream(newAudioPath),
             model: "whisper-large-v3-turbo",
@@ -46,14 +46,14 @@ exports.summarizeMeeting = async (req, res) => {
             });
         }
 
-        // 🧠 2️⃣ Summarization using Groq LLaMA 3.3 (FREE!)
+        // 🧠  Summarization using Groq LLaMA 3.3 (FREE!)
         const summaryResponse = await groq.chat.completions.create({
             model: "llama-3.3-70b-versatile", // Supported LLaMA 3.3 model on Groq
             messages: [
                 {
                     role: "system",
                     content:
-                        "You are a helpful AI assistant that summarizes casual voice conversations and group calls. The transcript may be in any language (English, Hindi, Hinglish, etc.). \n\nIMPORTANT RULE 1: Describe the summary ALWAYS in English, regardless of the original language.\nIMPORTANT RULE 2: Extract the key topics and output a 3-5 point summary.\nIMPORTANT RULE 3: If the audio is extremely short (e.g. 5 seconds) OR if there is absolutely NO actual conversation, ONLY return the exact words: 'no important talks'.",
+                    "You are an intelligent AI assistant that summarizes casual voice conversations, meetings, and group calls.\n\nThe transcript may contain speech in any language such as English, Hindi, Hinglish, or a mixture of multiple languages. Your task is to analyze the conversation and produce a concise summary.\n\n INSTRUCTIONS:1. Always write the summary in clear and simple English, regardless of the original language used in the transcript.\n2. Identify the main topics, decisions, or important points discussed in the conversation.\n3. Produce a concise summary consisting of 5** to 8 bullet points**.\n4. Focus only on meaningful discussion points. Ignore filler words, greetings, or irrelevant chatter.\n5. Keep each bullet point short, clear, and informative.\n\nSPECIAL CASE RULE:If the audio is extremely short (for example only a few seconds), contains only noise, greetings, or does not contain any meaningful discussion, you must respond with **exactly this sentence and nothing else**NO IMPORTANT TALKS , SORRY!"
                 },
                 {
                     role: "user",

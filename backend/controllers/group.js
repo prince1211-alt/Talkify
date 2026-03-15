@@ -4,9 +4,7 @@ const User = require("../models/User");
 const { io, getReceiverSocketId } = require("../config/socketio");
 const cloudinary = require("../config/cloudinary");
 
-// ============================
 // CREATE GROUP
-// ============================
 exports.createGroup = async (req, res) => {
     try {
         const { name, memberIds } = req.body;
@@ -33,9 +31,7 @@ exports.createGroup = async (req, res) => {
     }
 };
 
-// ============================
 // GET MY GROUPS
-// ============================
 exports.getMyGroups = async (req, res) => {
     try {
         const userId = req.user._id || req.user.id;
@@ -51,9 +47,7 @@ exports.getMyGroups = async (req, res) => {
     }
 };
 
-// ============================
 // GET GROUP MESSAGES
-// ============================
 exports.getGroupMessages = async (req, res) => {
     try {
         const { groupId } = req.params;
@@ -86,9 +80,7 @@ exports.getGroupMessages = async (req, res) => {
     }
 };
 
-// ============================
 // SEND GROUP MESSAGE (supports optional image via multipart)
-// ============================
 exports.sendGroupMessage = async (req, res) => {
     try {
         const { groupId } = req.params;
@@ -134,9 +126,8 @@ exports.sendGroupMessage = async (req, res) => {
     }
 };
 
-// ============================
+
 // GET GROUP PUBLIC KEYS
-// ============================
 exports.getGroupKeys = async (req, res) => {
     try {
         const { groupId } = req.params;
@@ -155,9 +146,7 @@ exports.getGroupKeys = async (req, res) => {
     }
 };
 
-// ============================
 // DELETE GROUP MESSAGE (soft)
-// ============================
 exports.deleteGroupMessage = async (req, res) => {
     try {
         const { groupId, messageId } = req.params;
@@ -186,9 +175,7 @@ exports.deleteGroupMessage = async (req, res) => {
     }
 };
 
-// ============================
 // DELETE GROUP
-// ============================
 exports.deleteGroup = async (req, res) => {
     try {
         const { groupId } = req.params;
@@ -217,9 +204,7 @@ exports.deleteGroup = async (req, res) => {
 };
 
 
-// ============================
 // REMOVE MEMBER FROM GROUP
-// ============================
 exports.removeMember = async (req, res) => {
     try {
         const { groupId, memberId } = req.params;
@@ -255,9 +240,7 @@ exports.removeMember = async (req, res) => {
 };
 
 
-// ============================
 // LEAVE GROUP
-// ============================
 exports.leaveGroup = async (req, res) => {
     try {
         const { groupId } = req.params;
@@ -294,9 +277,7 @@ exports.leaveGroup = async (req, res) => {
     }
 };
 
-// ============================
 // ADD MEMBER TO GROUP
-// ============================
 exports.addMember = async (req, res) => {
     try {
         const { groupId } = req.params;

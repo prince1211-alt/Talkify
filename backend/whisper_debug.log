@@ -1,0 +1,82 @@
+Summarization Error: 400 {"error":{"message":"file must be one of the following types: [flac mp3 mp4 mpeg mpga m4a ogg opus wav webm]","type":"invalid_request_error"}}
+Stack: Error: 400 {"error":{"message":"file must be one of the following types: [flac mp3 mp4 mpeg mpga m4a ogg opus wav webm]","type":"invalid_request_error"}}
+    at APIError.generate (C:\Users\PRINCE\OneDrive\Desktop\ChatApp\backend\node_modules\groq-sdk\error.js:40:20)
+    at Groq.makeStatusError (C:\Users\PRINCE\OneDrive\Desktop\ChatApp\backend\node_modules\groq-sdk\core.js:293:33)
+    at Groq.makeRequest (C:\Users\PRINCE\OneDrive\Desktop\ChatApp\backend\node_modules\groq-sdk\core.js:339:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async exports.summarizeMeeting (C:\Users\PRINCE\OneDrive\Desktop\ChatApp\backend\controllers\meeting.js:28:31)
+Transcription output: " So, we're already going to start a new situation."
+Text:  So, we're already going to start a new situation.
+Summarization Error: 400 {"error":{"message":"The model `llama3-8b-8192` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.","type":"invalid_request_error","code":"model_decommissioned"}}
+Stack: Error: 400 {"error":{"message":"The model `llama3-8b-8192` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.","type":"invalid_request_error","code":"model_decommissioned"}}
+    at APIError.generate (C:\Users\PRINCE\OneDrive\Desktop\ChatApp\backend\node_modules\groq-sdk\error.js:40:20)
+    at Groq.makeStatusError (C:\Users\PRINCE\OneDrive\Desktop\ChatApp\backend\node_modules\groq-sdk\core.js:293:33)
+    at Groq.makeRequest (C:\Users\PRINCE\OneDrive\Desktop\ChatApp\backend\node_modules\groq-sdk\core.js:339:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async exports.summarizeMeeting (C:\Users\PRINCE\OneDrive\Desktop\ChatApp\backend\controllers\meeting.js:51:33)
+Transcription output: " 종 next in"
+Text:  종 next in
+Summarization Error: 400 {"error":{"message":"The model `llama3-70b-8192` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.","type":"invalid_request_error","code":"model_decommissioned"}}
+Stack: Error: 400 {"error":{"message":"The model `llama3-70b-8192` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.","type":"invalid_request_error","code":"model_decommissioned"}}
+    at APIError.generate (C:\Users\PRINCE\OneDrive\Desktop\ChatApp\backend\node_modules\groq-sdk\error.js:40:20)
+    at Groq.makeStatusError (C:\Users\PRINCE\OneDrive\Desktop\ChatApp\backend\node_modules\groq-sdk\core.js:293:33)
+    at Groq.makeRequest (C:\Users\PRINCE\OneDrive\Desktop\ChatApp\backend\node_modules\groq-sdk\core.js:339:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async exports.summarizeMeeting (C:\Users\PRINCE\OneDrive\Desktop\ChatApp\backend\controllers\meeting.js:51:33)
+Transcription output: " Thank you."
+Text:  Thank you.
+Summarization Error: 400 {"error":{"message":"The model `llama3-70b-8192` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.","type":"invalid_request_error","code":"model_decommissioned"}}
+Stack: Error: 400 {"error":{"message":"The model `llama3-70b-8192` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.","type":"invalid_request_error","code":"model_decommissioned"}}
+    at APIError.generate (C:\Users\PRINCE\OneDrive\Desktop\ChatApp\backend\node_modules\groq-sdk\error.js:40:20)
+    at Groq.makeStatusError (C:\Users\PRINCE\OneDrive\Desktop\ChatApp\backend\node_modules\groq-sdk\core.js:293:33)
+    at Groq.makeRequest (C:\Users\PRINCE\OneDrive\Desktop\ChatApp\backend\node_modules\groq-sdk\core.js:339:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async exports.summarizeMeeting (C:\Users\PRINCE\OneDrive\Desktop\ChatApp\backend\controllers\meeting.js:51:33)
+Transcription output: " Our recording starts at 780-10. Let's start here. Let it play on 780-10. Let it play on 780-10."
+Text:  Our recording starts at 780-10. Let's start here. Let it play on 780-10. Let it play on 780-10.
+Transcription output: " I"
+Text:  I
+Transcription output: " Are you worried about the pain of your death?"
+Text:  Are you worried about the pain of your death?
+Transcription output: " Our"
+Text:  Our
+Transcription output: " cr сюж Chemistry ul Glasgow khaki ul Kim 신 m CNN took regardless is"
+Text:  cr сюж Chemistry ul Glasgow khaki ul Kim 신 m CNN took regardless is
+Transcription output: " To people breaking down if they issue."
+Text:  To people breaking down if they issue.
+Transcription output: " So, one really centralized peer-to-peer digital currency and door of medical caution to 0.9 by Sandokshi Notomobile. It is operated on a public blockchain vehicle without central authority, using mind to verify the navigation and secure the number. With the fixed maximum supply supply uh security conditions are stored immature when you may grow over consistence forever."
+Text:  So, one really centralized peer-to-peer digital currency and door of medical caution to 0.9 by Sandokshi Notomobile. It is operated on a public blockchain vehicle without central authority, using mind to verify the navigation and secure the number. With the fixed maximum supply supply uh security conditions are stored immature when you may grow over consistence forever.
+Transcription output: " You who belong to the forces of the小心."
+Text:  You who belong to the forces of the小心.
+Transcription output: " and"
+Text:  and
+Transcription output: " ik is So"
+Text:  ik is So
+Transcription output: " So, are you forty five question? Not sorry, this is a question that's not the question. Our question is...� IAQ bunu phb το Express. Escra IN321 yачnayye 저희 Camera in 내가 activity such as tss, JavaScript and Divid. Okay."
+Text:  So, are you forty five question? Not sorry, this is a question that's not the question. Our question is...� IAQ bunu phb το Express. Escra IN321 yачnayye 저희 Camera in 내가 activity such as tss, JavaScript and Divid. Okay.
+Transcription output: " We are talking about how to learn Merchlight. So there are four important tools to learn Merchlight. First, we have to learn HTML, CSS, JavaScript and Game. these four are important before learning one so these four can be able to move on one so we can build up this more strong"
+Text:  We are talking about how to learn Merchlight. So there are four important tools to learn Merchlight. First, we have to learn HTML, CSS, JavaScript and Game. these four are important before learning one so these four can be able to move on one so we can build up this more strong
+Transcription output: " It's different than the currency and furtherใช it and then the screen screen. is"
+Text:  It's different than the currency and furtherใช it and then the screen screen. is
+Transcription output: " So today we will discuss about how to get your best 10 Ooh? So which technology If you no one additional Audience Then So, this can be so"
+Text:  So today we will discuss about how to get your best 10 Ooh? So which technology If you no one additional Audience Then So, this can be so
+Transcription output: " So, theored text into theByDate. Now, I am checking if this passo Stop State is working for the mode."
+Text:  So, theored text into theByDate. Now, I am checking if this passo Stop State is working for the mode.
+Transcription output: " I am the speaker of an AI tool which is open source for a language speech to text."
+Text:  I am the speaker of an AI tool which is open source for a language speech to text.
+Transcription output: " I am going to test this audio feature which summarize the audio into depth."
+Text:  I am going to test this audio feature which summarize the audio into depth.
+Transcription output: " So, I'm already working on open source. Open source is very good, working correctly on board. This tripod changes speech into text."
+Text:  So, I'm already working on open source. Open source is very good, working correctly on board. This tripod changes speech into text.
+Transcription output: " Now I am warning the user in the very funny same process that the species is promoting to protect on it."
+Text:  Now I am warning the user in the very funny same process that the species is promoting to protect on it.
+Transcription output: " It is a decentralized open source of chain-packed foundations, smart contract, nationality, and its cryptocurrency. EtherA acts as a foundation for decentralized education, decentralized finance, and non-franchise to pass a program to have a transaction with the internet. EtherA exists a program of state against..."
+Text:  It is a decentralized open source of chain-packed foundations, smart contract, nationality, and its cryptocurrency. EtherA acts as a foundation for decentralized education, decentralized finance, and non-franchise to pass a program to have a transaction with the internet. EtherA exists a program of state against...
+Transcription output: " Question, please, please, what? Self-executing articles with the terms of the incrementally returning code for matrix-less transactions."
+Text:  Question, please, please, what? Self-executing articles with the terms of the incrementally returning code for matrix-less transactions.
+Transcription output: " Criminal Key"
+Text:  Criminal Key
+Transcription output: " The moon-like entwickelt feature features in a digital currency locked in 2009b where online companies and by authorities using DomRP and 어떻게 can manufacturing BACK"
+Text:  The moon-like entwickelt feature features in a digital currency locked in 2009b where online companies and by authorities using DomRP and 어떻게 can manufacturing BACK
+Transcription output: " commercial system network"
+Text:  commercial system network

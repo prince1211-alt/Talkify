@@ -20,13 +20,11 @@ export default function SignUp() {
     const { signup, isSigningUp } = useAuthStore();
     const navigate = useNavigate();
 
-    // ✅ Common change handler
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
-    // ✅ Submit handler
     const handleSubmit = async (e) => {
 
         e.preventDefault();
@@ -35,7 +33,7 @@ export default function SignUp() {
             return toast.error("Passwords do not match");
         }
 
-        const { confirmPassword, ...dataToSend } = formData;
+        const { confirmPassword, ...dataToSend } = formData; // formData se confirmPassword hata do baki data dataToSend me daal do 
         const success = await signup(dataToSend);
         if (success) {
             navigate("/");
@@ -43,7 +41,6 @@ export default function SignUp() {
         toast.success("Account created successfully");
     };
 
-    // ✅ Send OTP handler
     const handleSendOtp = async () => {
         if (!formData.email) return toast.error("Please enter email first");
 
@@ -203,7 +200,7 @@ export default function SignUp() {
     );
 }
 
-/* ✅ Reusable Input Component */
+
 function InputField({ label, name, type, value, onChange, placeholder, icon }) {
     return (
         <div>

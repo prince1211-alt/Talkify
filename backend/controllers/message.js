@@ -11,9 +11,7 @@ const uploadBufferToCloudinary = async (file) => {
   return upload.secure_url || "";
 };
 
-// ============================
 // GET USERS (Sidebar)
-// ============================
 exports.getUsersForSidebar = async (req, res) => {
   try {
     const myId = req.user._id || req.user.id;
@@ -31,9 +29,7 @@ exports.getUsersForSidebar = async (req, res) => {
 };
 
 
-// ============================
 // GET CHAT MESSAGES
-// ============================
 exports.getMessages = async (req, res) => {
   try {
     const myId = req.user._id || req.user.id;
@@ -54,9 +50,7 @@ exports.getMessages = async (req, res) => {
 };
 
 
-// ============================
 // SEND MESSAGE
-// ============================
 exports.sendMessage = async (req, res) => {
   try {
     const senderId = req.user._id || req.user.id;
@@ -141,9 +135,7 @@ exports.sendMessage = async (req, res) => {
   }
 };
 
-// ============================
 // GET USER PUBLIC KEY
-// ============================
 exports.getPublicKey = async (req, res) => {
   try {
     const userId = req.params.id;
@@ -155,9 +147,7 @@ exports.getPublicKey = async (req, res) => {
   }
 };
 
-// ============================
 // DELETE MESSAGE (soft)
-// ============================
 exports.deleteMessage = async (req, res) => {
   try {
     const messageId = req.params.id;
@@ -192,9 +182,7 @@ exports.deleteMessage = async (req, res) => {
 };
 
 
-// ============================
 //  MARK MESSAGES AS READ   not in use right now
-// ============================
 exports.markMessagesRead = async (req, res) => {
   try {
     const myId = req.user._id || req.user.id;
