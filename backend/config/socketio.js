@@ -31,7 +31,7 @@ const io = new Server(server, {
   },
 });
 
-// 🔹 Helper function used in message controller
+//  Helper function used in message controller 
 const getReceiverSocketId = (userId) => {
   return userSocketMap.get(String(userId));
 };
