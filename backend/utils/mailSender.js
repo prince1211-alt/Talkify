@@ -10,9 +10,10 @@ const mailSender = async (email, title, body) => {
     try {
         // Use port 587 + STARTTLS — port 465 (SSL) is blocked by many cloud hosts like Render
         const transporter = nodemailer.createTransport({
-            host: process.env.MAIL_HOST,
+            host: "smtp.gmail.com",
             port: 587,
-            secure: false, // STARTTLS (upgrades connection after connect)
+            secure: false, // STARTTLS
+            family: 4, // Force IPv4 — Render free tier blocks outbound IPv6
             auth: {
                 user: process.env.MAIL_USER,
                 pass: process.env.MAIL_PASS,
@@ -20,7 +21,7 @@ const mailSender = async (email, title, body) => {
             tls: {
                 rejectUnauthorized: false,
             },
-            connectionTimeout: 10000, // 10 second timeout to fail fast
+            connectionTimeout: 10000,
             greetingTimeout: 10000,
             socketTimeout: 15000,
         });
