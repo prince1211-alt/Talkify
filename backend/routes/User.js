@@ -11,6 +11,7 @@ const {
 
 router.post("/signup", signup)
 router.post("signUp",signup)
+
 router.post("/login", login)
 router.post("/sendotp", sendotp)
 router.post("/add-contact", auth, addContact)
