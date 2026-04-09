@@ -17,3 +17,16 @@ axiosInstance.interceptors.request.use((config) => {
     } catch (_) { }
     return config;
 });
+
+// Handle 401 Unauthorized globally
+axiosInstance.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response && error.response.status === 401) {
+            // Token is invalid or expired
+            localStorage.removeItem("chat-user");
+            window.location.href = "/login";
+        }
+        return Promise.reject(error);
+    }
+);
