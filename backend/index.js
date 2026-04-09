@@ -21,23 +21,17 @@ const PORT = process.env.PORT || 5001;
 app.use(express.json());
 app.use(cookieParser());
 
-const allowedOrigins = [
-  /^http:\/\/localhost:\d+$/,
-  process.env.FRONTEND_URL,
-].filter(Boolean);
+// Removing strict array since we will allow Origin dynamically
+// const allowedOrigins = [
+//   /^http:\/\/localhost:\d+$/,
+//   process.env.FRONTEND_URL,
+// ].filter(Boolean);
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      const isAllowed = allowedOrigins.some((allowed) =>
-        allowed instanceof RegExp ? allowed.test(origin) : allowed === origin
-      );
-      if (isAllowed) {
-        callback(null, true);
-      } else {
-        callback(new Error('CORS not allowed: ' + origin));
-      }
+      // Allow all origins to seamlessly support standalone and monolith deployment
+      callback(null, true);
     },
     credentials: true,
   })

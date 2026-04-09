@@ -9,23 +9,17 @@ const server = http.createServer(app);
 // 🔹 Store online users (userId -> socketId)
 const userSocketMap = new Map();
 
-const allowedSocketOrigins = [
-  /^http:\/\/localhost:\d+$/,
-  process.env.FRONTEND_URL,
-].filter(Boolean);
+// Removing strict array since we allow dynamic Socket.io connections 
+// const allowedSocketOrigins = [
+//   /^http:\/\/localhost:\d+$/,
+//   process.env.FRONTEND_URL,
+// ].filter(Boolean);
 
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      const isAllowed = allowedSocketOrigins.some((allowed) =>
-        allowed instanceof RegExp ? allowed.test(origin) : allowed === origin
-      );
-      if (isAllowed) {
-        callback(null, true);
-      } else {
-        callback(new Error("CORS not allowed: " + origin));
-      }
+      // Allow all origins to seamlessly support standalone and monolith deployment
+      callback(null, true);
     },
     credentials: true,
   },
