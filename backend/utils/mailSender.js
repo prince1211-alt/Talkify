@@ -1,19 +1,20 @@
 const nodemailer = require("nodemailer");
+const dns = require("dns");
+
+// Force Node.js to resolve hostnames to IPv4 FIRST
+dns.setDefaultResultOrder("ipv4first");
 
 const mailSender = async (email, title, body) => {
-    // Warn early if env vars are missing — helps debug on Render
     if (!process.env.MAIL_HOST || !process.env.MAIL_USER || !process.env.MAIL_PASS) {
-        console.error("❌ Mail env vars missing! MAIL_HOST:", process.env.MAIL_HOST, "MAIL_USER:", process.env.MAIL_USER);
-        throw new Error("Email configuration is missing. Please set MAIL_HOST, MAIL_USER, MAIL_PASS in environment variables.");
+        console.error("❌ Mail env vars missing!");
+        throw new Error("Email configuration is missing.");
     }
 
     try {
-        // Use port 587 + STARTTLS — port 465 (SSL) is blocked by many cloud hosts like Render
         const transporter = nodemailer.createTransport({
             host: "smtp.gmail.com",
             port: 587,
-            secure: false, // STARTTLS
-            family: 4, // Force IPv4 — Render free tier blocks outbound IPv6
+            secure: false,
             auth: {
                 user: process.env.MAIL_USER,
                 pass: process.env.MAIL_PASS,
