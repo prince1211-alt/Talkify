@@ -1,27 +1,30 @@
-const { Resend } = require("resend");
-
-const resend = new Resend(process.env.RESEND_API_KEY);
+const nodemailer = require("nodemailer");
 
 const mailSender = async (email, title, body) => {
-    if (!process.env.RESEND_API_KEY) {
-        throw new Error("RESEND_API_KEY is missing from environment variables.");
+    if (!process.env.BREVO_USER || !process.env.BREVO_PASS) {
+        throw new Error("BREVO_USER or BREVO_PASS missing from environment variables.");
     }
 
     try {
-        const { data, error } = await resend.emails.send({
-            from: "Talkify <onboarding@resend.dev>", // use this until you add a domain
+        const transporter = nodemailer.createTransport({
+            host: "smtp-relay.brevo.com",
+            port: 587,
+            secure: false,
+            auth: {
+                user: process.env.BREVO_USER,   // your Brevo account email
+                pass: process.env.BREVO_PASS,   // Brevo SMTP key (not your password)
+            },
+        });
+
+        const info = await transporter.sendMail({
+            from: `"Talkify" <${process.env.BREVO_USER}>`,
             to: email,
             subject: title,
             html: body,
         });
 
-        if (error) {
-            console.error("❌ Email send error:", error);
-            throw new Error(error.message);
-        }
-
-        console.log("✅ Email sent:", data.id);
-        return data;
+        console.log("✅ Email sent:", info.messageId);
+        return info;
 
     } catch (error) {
         console.error("❌ Email send error:", error.message);
