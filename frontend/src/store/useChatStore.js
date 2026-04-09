@@ -483,8 +483,16 @@ export const useChatStore = create((set, get) => ({
 
     addContact: async (uniqueId) => {
         try {
-            await axiosInstance.post("/auth/add-contact", { uniqueId });
+            const res = await axiosInstance.post("/auth/add-contact", { uniqueId });
             toast.success("Contact added successfully");
+            if (res.data && res.data.targetUser) {
+                const newContact = { ...res.data.targetUser, unread: 0 };
+                // ensure we don't duplicate
+                const { users } = get();
+                if (!users.some(u => u._id === newContact._id)) {
+                    set({ users: [...users, newContact] });
+                }
+            }
             await get().getUsers();
             return true;
         } catch (error) {

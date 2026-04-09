@@ -25,10 +25,11 @@ export default function Sidebar({ className = "" }) {
     }, [getUsers, getGroups]);
 
     const filteredUsers = users
+        .filter(user => user && user._id)
         .filter(user => user._id !== authUser?._id)
         .filter(user =>
-            user.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            user.uniqueId.toLowerCase().includes(searchTerm.toLowerCase())
+            (user.fullName?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+            (user.uniqueId?.toLowerCase() || "").includes(searchTerm.toLowerCase())
         );
 
     const filteredGroups = groups.filter(group =>
