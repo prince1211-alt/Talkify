@@ -13,7 +13,7 @@ export default function CreateGroupModal({ isOpen, onClose }) {
     if (!isOpen) return null;
 
     const filteredUsers = users.filter((u) =>
-        u.fullName.toLowerCase().includes(searchTerm.toLowerCase())
+        (u.fullName || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const toggleUser = (userId) => {
@@ -36,7 +36,7 @@ export default function CreateGroupModal({ isOpen, onClose }) {
             setGroupName("");
             setSelectedUsers([]);
         } catch (error) {
-            toast.error("Failed to create group");
+            toast.error(error.response?.data?.message || "Failed to create group");
         } finally {
             setIsSubmitting(false);
         }
@@ -94,6 +94,7 @@ export default function CreateGroupModal({ isOpen, onClose }) {
                         <div className="max-h-60 overflow-y-auto pr-2 space-y-1 custom-scrollbar">
                             {filteredUsers.map((user) => (
                                 <button
+                                    type="button"
                                     key={user._id}
                                     onClick={() => toggleUser(user._id)}
                                     className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${selectedUsers.includes(user._id)
@@ -103,9 +104,9 @@ export default function CreateGroupModal({ isOpen, onClose }) {
                                 >
                                     <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-600 overflow-hidden shrink-0">
                                         {user.profilePic ? (
-                                            <img src={user.profilePic} className="w-full h-full object-cover" />
+                                            <img src={user.profilePic} alt={user.fullName} className="w-full h-full object-cover" />
                                         ) : (
-                                            user.fullName.charAt(0)
+                                            user.fullName?.charAt(0)
                                         )}
                                     </div>
                                     <div className="flex-1 text-left">
@@ -138,7 +139,7 @@ export default function CreateGroupModal({ isOpen, onClose }) {
                     <button
                         onClick={handleCreate}
                         disabled={isSubmitting || !groupName.trim() || selectedUsers.length === 0}
-                        className="flex-2 py-3 px-8 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-indigo-200"
+                        className="flex-[2] py-3 px-8 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-indigo-200"
                     >
                         {isSubmitting ? "Creating..." : "Create Group"}
                     </button>

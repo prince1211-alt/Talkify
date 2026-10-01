@@ -15,7 +15,7 @@ export default function GroupMembersModal({ isOpen, onClose, members }) {
 
     const isCreator =
         selectedGroup &&
-        String(selectedGroup.createdBy) === String(authUser?._id);
+        String(selectedGroup.createdBy?._id || selectedGroup.createdBy) === String(authUser?._id);
 
     const handleRemove = (memberId) => {
         if (!selectedGroup) return;

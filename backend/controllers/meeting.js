@@ -1,17 +1,34 @@
-const fs = require("fs");
+const fs = require("fs/promises");
+const { createReadStream } = require("fs");
+const path = require("path");
 const Groq = require("groq-sdk");
 
-// Initialize Groq client (free API - no OpenAI key needed!)
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY,
-});
+// Created on first use: `new Groq()` throws when GROQ_API_KEY is missing,
+// which used to crash the whole server at startup.
+let groq = null;
+const getGroq = () => {
+    if (!groq) groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    return groq;
+};
+
+const AUDIO_EXTENSIONS = {
+    "audio/webm": ".webm",
+    "video/webm": ".webm",
+    "audio/ogg": ".ogg",
+    "audio/mp4": ".m4a",
+    "audio/mpeg": ".mp3",
+    "audio/wav": ".wav",
+};
+
+const removeQuietly = (filePath) => fs.rm(filePath, { force: true }).catch(() => {});
 
 exports.summarizeMeeting = async (req, res) => {
+    let audioPath = null;
     try {
         if (!process.env.GROQ_API_KEY) {
-            return res.status(500).json({
+            return res.status(503).json({
                 success: false,
-                message: "GROQ_API_KEY missing in .env file.",
+                message: "Meeting summary is not configured on the server (GROQ_API_KEY missing).",
             });
         }
 
@@ -22,13 +39,15 @@ exports.summarizeMeeting = async (req, res) => {
             });
         }
 
-        const audioPath = req.file.path;
-        const newAudioPath = audioPath + ".webm";
-        fs.renameSync(audioPath, newAudioPath);
+        // Whisper needs a real file extension to detect the format
+        const baseType = req.file.mimetype.split(";")[0];
+        const ext = AUDIO_EXTENSIONS[baseType] || path.extname(req.file.originalname) || ".webm";
+        audioPath = req.file.path + ext;
+        await fs.rename(req.file.path, audioPath);
 
         // 🎙️ 1️⃣ Speech to Text using Groq Whisper (Auto-detects language)
-        const transcription = await groq.audio.transcriptions.create({
-            file: fs.createReadStream(newAudioPath),
+        const transcription = await getGroq().audio.transcriptions.create({
+            file: createReadStream(audioPath),
             model: "whisper-large-v3-turbo",
             response_format: "text"
         });
@@ -36,19 +55,16 @@ exports.summarizeMeeting = async (req, res) => {
         const transcriptText =
             typeof transcription === "string" ? transcription : transcription.text;
 
-        fs.appendFileSync("whisper_debug.log", `Transcription output: ${JSON.stringify(transcription)}\nText: ${transcriptText}\n`);
-
         if (!transcriptText || transcriptText.trim() === "") {
-            fs.unlinkSync(newAudioPath);
             return res.status(400).json({
                 success: false,
                 message: "Audio is empty or could not be transcribed",
             });
         }
 
-        // 🧠 2️⃣ Summarization using Groq LLaMA 3.3 (FREE!)
-        const summaryResponse = await groq.chat.completions.create({
-            model: "llama-3.3-70b-versatile", // Supported LLaMA 3.3 model on Groq
+        // 🧠 2️⃣ Summarization using Groq LLaMA 3.3
+        const summaryResponse = await getGroq().chat.completions.create({
+            model: "llama-3.3-70b-versatile",
             messages: [
                 {
                     role: "system",
@@ -66,27 +82,20 @@ exports.summarizeMeeting = async (req, res) => {
 
         const summary = summaryResponse.choices[0].message.content;
 
-        // 🧹 Cleanup uploaded file
-        fs.unlinkSync(newAudioPath);
-
         return res.status(200).json({
             success: true,
             transcript: transcriptText,
             summary: summary,
         });
     } catch (error) {
-        console.error("Summarization Error:", error);
-        fs.appendFileSync("whisper_debug.log", `Summarization Error: ${error.message}\nStack: ${error.stack}\n`);
-
-        if (req.file?.path) {
-            if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-            if (fs.existsSync(req.file.path + ".webm")) fs.unlinkSync(req.file.path + ".webm");
-        }
-
+        console.error("Summarization Error:", error.message);
         return res.status(500).json({
             success: false,
             message: "Failed to process audio",
-            error: error.message,
         });
+    } finally {
+        // 🧹 Never keep call recordings on the server
+        if (req.file?.path) await removeQuietly(req.file.path);
+        if (audioPath) await removeQuietly(audioPath);
     }
 };

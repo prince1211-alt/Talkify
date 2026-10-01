@@ -1,41 +1,32 @@
 const mongoose = require("mongoose");
-const mailSender = require("../utils/mailSender");
-//const emailTemplate = require("../mail/templates/emailVerificationTemplate");
+
+// Emails are sent by utils/otp.js, not from a save hook, so a failed email
+// never leaves a usable code behind and the controller can report the error.
 const OTPSchema = new mongoose.Schema({
 	email: {
 		type: String,
 		required: true,
+		index: true,
 	},
-	otp: {
+	purpose: {
+		type: String,
+		enum: ["signup", "reset"],
+		required: true,
+	},
+	// HMAC of the code — the plain code is never stored
+	otpHash: {
 		type: String,
 		required: true,
+	},
+	attempts: {
+		type: Number,
+		default: 0,
 	},
 	createdAt: {
 		type: Date,
 		default: Date.now,
 		expires: 60 * 5,
 	},
-});
-
-async function sendVerificationEmail(email, otp) {
-
-	try {
-		const mailResponse = await mailSender(
-			email,
-			"Talkify Verification Email",
-			`<h1>Welcome to Talkify!</h1><p>Your OTP for registration is: <b>${otp}</b></p>`
-		);
-	} catch (error) {
-		throw error;
-	}
-}
-
-OTPSchema.pre("save", async function () {
-
-	if (this.isNew) {
-		await sendVerificationEmail(this.email, this.otp);
-	}
-
 });
 
 const OTP = mongoose.model("OTP", OTPSchema);

@@ -1,31 +1,35 @@
+const mongoose = require("mongoose");
 const User = require("../models/User.js");
 const Message = require("../models/Message.js");
-const cloudinary = require("../config/cloudinary.js");
-const { getReceiverSocketId, io } = require("../config/socketio.js");
+const { uploadBufferToCloudinary } = require("../config/multer.js");
+const { io } = require("../config/socketio.js");
 
-// Helper: upload buffer (from multer) to Cloudinary using data URI
-const uploadBufferToCloudinary = async (file) => {
-  if (!file) return "";
-  const dataUri = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
-  const upload = await cloudinary.uploader.upload(dataUri);
-  return upload.secure_url || "";
-};
+const MAX_CIPHERTEXT_LENGTH = 100000;
+
+const str = (value) => (typeof value === "string" ? value : "");
+const isValidId = (id) => mongoose.isObjectIdOrHexString(id);
+const publicProfile = (user) => ({
+  _id: user._id,
+  fullName: user.fullName,
+  uniqueId: user.uniqueId,
+  profilePic: user.profilePic,
+  status: user.status,
+});
 
 // ============================
 // GET USERS (Sidebar)
 // ============================
 exports.getUsersForSidebar = async (req, res) => {
   try {
-    const myId = req.user._id || req.user.id;
-
-    const me = await User.findById(myId).populate({
+    const me = await User.findById(req.user.id).populate({
       path: "contacts",
-      select: "-password"
+      select: "fullName uniqueId profilePic status publicKey",
     });
+    if (!me) return res.status(404).json({ message: "User not found" });
 
-    res.json(me.contacts);
-
+    res.json(me.contacts.filter(Boolean));
   } catch (err) {
+    console.error("getUsersForSidebar error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -36,42 +40,52 @@ exports.getUsersForSidebar = async (req, res) => {
 // ============================
 exports.getMessages = async (req, res) => {
   try {
-    const myId = req.user._id || req.user.id;
+    const myId = req.user.id;
     const otherUserId = req.params.id;
+    if (!isValidId(otherUserId)) return res.status(400).json({ message: "Invalid user id" });
 
     const messages = await Message.find({
       $or: [
         { senderId: myId, receiverId: otherUserId },
         { senderId: otherUserId, receiverId: myId }
       ]
-    });
+    }).sort({ createdAt: 1 });
 
     res.json(messages);
-
   } catch (err) {
+    console.error("getMessages error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
 
 // ============================
-// SEND MESSAGE
+// SEND MESSAGE (text and/or image, both encrypted on the client)
 // ============================
 exports.sendMessage = async (req, res) => {
   try {
-    const senderId = req.user._id || req.user.id;
+    const senderId = req.user.id;
     const receiverId = req.params.id;
-    const { text, encryptedKeyForSender, encryptedKeyForReceiver, iv } = req.body;
+    const body = req.body || {};
 
-    let imageUrl = "";
+    const text = str(body.text);
+    const iv = str(body.iv);
+    const imageIv = str(body.imageIv);
+    const encryptedKeyForSender = str(body.encryptedKeyForSender);
+    const encryptedKeyForReceiver = str(body.encryptedKeyForReceiver);
 
-    // multipart upload via multer (req.file) or fallback to body.image (base64)
-    if (req.file) {
-      imageUrl = await uploadBufferToCloudinary(req.file);
-    } else if (req.body.image) {
-      const upload = await cloudinary.uploader.upload(req.body.image);
-      imageUrl = upload.secure_url;
-    }
+    if (!isValidId(receiverId)) return res.status(400).json({ message: "Invalid receiver" });
+    if (receiverId === senderId) return res.status(400).json({ message: "You cannot message yourself" });
+    if (!text && !req.file) return res.status(400).json({ message: "Message is empty" });
+    if (text.length > MAX_CIPHERTEXT_LENGTH) return res.status(413).json({ message: "Message is too long" });
+
+    const [sender, receiver] = await Promise.all([
+      User.findById(senderId).select("fullName uniqueId profilePic status contacts"),
+      User.findById(receiverId).select("fullName uniqueId profilePic status contacts"),
+    ]);
+    if (!sender || !receiver) return res.status(404).json({ message: "User not found" });
+
+    const imageUrl = req.file ? await uploadBufferToCloudinary(req.file, { encrypted: Boolean(imageIv) }) : "";
 
     const message = await Message.create({
       senderId,
@@ -81,62 +95,27 @@ exports.sendMessage = async (req, res) => {
       encryptedKeyForReceiver,
       iv,
       image: imageUrl,
+      imageIv: imageUrl ? imageIv : "",
     });
 
-    // Auto-add each user to the other's contacts (if not already there)
-    // This lets the receiver see the sender in their sidebar without manually adding them
-    const [sender, receiver] = await Promise.all([
-      User.findById(senderId),
-      User.findById(receiverId),
+    // Auto-add each user to the other's contacts so both see the chat in their sidebar
+    const senderHadReceiver = sender.contacts.some((id) => String(id) === receiverId);
+    const receiverHadSender = receiver.contacts.some((id) => String(id) === senderId);
+
+    await Promise.all([
+      senderHadReceiver ? null : User.updateOne({ _id: senderId }, { $addToSet: { contacts: receiver._id } }),
+      receiverHadSender ? null : User.updateOne({ _id: receiverId }, { $addToSet: { contacts: sender._id } }),
     ]);
 
-    let senderUpdated = false;
-    let receiverUpdated = false;
-
-    if (sender && !sender.contacts.includes(receiverId)) {
-      sender.contacts.push(receiverId);
-      await sender.save();
-      senderUpdated = true;
-    }
-
-    if (receiver && !receiver.contacts.includes(senderId)) {
-      receiver.contacts.push(senderId);
-      await receiver.save();
-      receiverUpdated = true;
-    }
-
-    // If receiver's contacts were updated, notify them via socket so sidebar refreshes
-    if (receiverUpdated) {
-      io.to(receiverId.toString()).emit("contactAdded", {
-        user: {
-          _id: sender._id,
-          fullName: sender.fullName,
-          uniqueId: sender.uniqueId,
-          profilePic: sender.profilePic,
-          status: sender.status,
-        }
-      });
-    }
-
-    // Also notify sender if they didn't have receiver in contacts
-    if (senderUpdated) {
-      io.to(senderId.toString()).emit("contactAdded", {
-        user: {
-          _id: receiver._id,
-          fullName: receiver.fullName,
-          uniqueId: receiver.uniqueId,
-          profilePic: receiver.profilePic,
-          status: receiver.status,
-        }
-      });
-    }
+    if (!receiverHadSender) io.to(receiverId).emit("contactAdded", { user: publicProfile(sender) });
+    if (!senderHadReceiver) io.to(senderId).emit("contactAdded", { user: publicProfile(receiver) });
 
     // Emit to both sender and receiver (all their tabs)
     io.to(senderId).to(receiverId).emit("newMessage", message);
 
     res.status(201).json(message);
-
   } catch (err) {
+    console.error("sendMessage error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -147,33 +126,83 @@ exports.sendMessage = async (req, res) => {
 exports.getPublicKey = async (req, res) => {
   try {
     const userId = req.params.id;
+    if (!isValidId(userId)) return res.status(400).json({ message: "Invalid user id" });
+
     const user = await User.findById(userId).select("publicKey");
     if (!user) return res.status(404).json({ message: "User not found" });
     res.json({ publicKey: user.publicKey });
   } catch (err) {
+    console.error("getPublicKey error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
 // ============================
-// DELETE MESSAGE (soft)
+// ENCRYPTED MEDIA FALLBACK
+// ============================
+// Encrypted images are fetched by the browser and decrypted locally. If the browser can't
+// fetch them from Cloudinary directly (CORS / network), it gets the same ciphertext through here.
+// Only raw files of this app's own Cloudinary account are allowed (no open proxy).
+const MAX_MEDIA_BYTES = 10 * 1024 * 1024;
+
+exports.getEncryptedMedia = async (req, res) => {
+  try {
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    let url;
+    try {
+      url = new URL(str(req.query.url));
+    } catch {
+      return res.status(400).json({ message: "Invalid media url" });
+    }
+
+    const allowed =
+      cloudName &&
+      url.protocol === "https:" &&
+      url.hostname === "res.cloudinary.com" &&
+      url.pathname.startsWith(`/${cloudName}/raw/upload/`);
+    if (!allowed) return res.status(400).json({ message: "Invalid media url" });
+
+    const upstream = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!upstream.ok) return res.status(502).json({ message: "Could not load media" });
+    if (Number(upstream.headers.get("content-length")) > MAX_MEDIA_BYTES) {
+      return res.status(413).json({ message: "Media too large" });
+    }
+
+    const data = Buffer.from(await upstream.arrayBuffer());
+    res.set("Content-Type", "application/octet-stream");
+    res.set("Cache-Control", "private, max-age=86400");
+    return res.send(data);
+  } catch (err) {
+    console.error("getEncryptedMedia error:", err.message);
+    return res.status(502).json({ message: "Could not load media" });
+  }
+};
+
+// ============================
+// DELETE MESSAGE (soft — content is wiped, a "deleted" placeholder stays)
 // ============================
 exports.deleteMessage = async (req, res) => {
   try {
     const messageId = req.params.id;
-    const userId = req.user._id || req.user.id;
+    const userId = req.user.id;
+    if (!isValidId(messageId)) return res.status(400).json({ message: "Invalid message id" });
 
     const message = await Message.findById(messageId);
     if (!message) return res.status(404).json({ message: "Message not found" });
 
-    // Allow sender, receiver, or admin (if isAdmin flag exists on user)
-    const isSender = message.senderId.toString() === userId.toString();
-    const isReceiver = message.receiverId.toString() === userId.toString();
-    if (!isSender && !isReceiver && !req.user.isAdmin) {
+    const isSender = message.senderId.toString() === userId;
+    const isReceiver = message.receiverId.toString() === userId;
+    if (!isSender && !isReceiver) {
       return res.status(403).json({ message: "Not authorized to delete this message" });
     }
 
     message.deleted = true;
+    message.text = "";
+    message.iv = "";
+    message.image = "";
+    message.imageIv = "";
+    message.encryptedKeyForSender = "";
+    message.encryptedKeyForReceiver = "";
     await message.save();
 
     // Notify both parties
@@ -193,12 +222,13 @@ exports.deleteMessage = async (req, res) => {
 
 
 // ============================
-//  MARK MESSAGES AS READ   not in use right now
+//  MARK MESSAGES AS READ
 // ============================
 exports.markMessagesRead = async (req, res) => {
   try {
-    const myId = req.user._id || req.user.id;
+    const myId = req.user.id;
     const otherUserId = req.params.id;
+    if (!isValidId(otherUserId)) return res.status(400).json({ message: "Invalid user id" });
 
     await Message.updateMany(
       { senderId: otherUserId, receiverId: myId, seen: false },

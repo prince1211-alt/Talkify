@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Mail, Lock, LogIn, Loader2 } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { axiosInstance } from "../lib/axios";
+import { generateRSAKeyPair, encryptPrivateKeyWithPassword } from "../utils/crypto";
 
 export default function Login() {
     const [formData, setFormData] = useState({
@@ -20,6 +21,62 @@ export default function Login() {
     const [forgotStep, setForgotStep] = useState(1); // 1: send email, 2: verify & reset
     const [otp, setOtp] = useState("");
     const [newPassword, setNewPassword] = useState("");
+    const [isForgotBusy, setIsForgotBusy] = useState(false);
+    const [otpCooldown, setOtpCooldown] = useState(0);
+
+    useEffect(() => {
+        if (otpCooldown <= 0) return undefined;
+        const id = setTimeout(() => setOtpCooldown((s) => s - 1), 1000);
+        return () => clearTimeout(id);
+    }, [otpCooldown]);
+
+    const closeForgot = () => {
+        setShowForgot(false);
+        setForgotStep(1);
+        setOtp("");
+        setNewPassword("");
+    };
+
+    const sendResetOtp = async () => {
+        const email = forgotEmail.trim();
+        if (!email) { toast.error('Please enter your email'); return; }
+        setIsForgotBusy(true);
+        try {
+            await axiosInstance.post('/auth/forgot-password', { email });
+            setForgotStep(2);
+            setOtpCooldown(60);
+            toast.success('OTP sent! Check your inbox (and spam folder).');
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to send OTP');
+        } finally {
+            setIsForgotBusy(false);
+        }
+    };
+
+    // The old private key was locked with the old password, so a reset needs a new key pair
+    const resetPassword = async () => {
+        if (!otp.trim() || !newPassword) { toast.error('OTP and new password are required'); return; }
+        if (newPassword.length < 6) { toast.error('Password must be at least 6 characters'); return; }
+        setIsForgotBusy(true);
+        try {
+            const { publicKeyStr, privateKeyStr } = await generateRSAKeyPair();
+            const encryptedPrivateKey = await encryptPrivateKeyWithPassword(privateKeyStr, newPassword);
+            await axiosInstance.post('/auth/reset-password', {
+                email: forgotEmail.trim(),
+                otp: otp.trim(),
+                newPassword,
+                publicKey: publicKeyStr,
+                encryptedPrivateKey,
+            });
+            toast.success('Password reset successful. Please login.');
+            closeForgot();
+            setForgotEmail('');
+        } catch (err) {
+            toast.error(err.response?.data?.message || err.message || 'Failed to reset password');
+        } finally {
+            setIsForgotBusy(false);
+        }
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -43,7 +100,7 @@ export default function Login() {
                 <div className="bg-[#AACEBA] py-8 px-4 shadow-lg shadow-black/50 sm:rounded-lg sm:px-10 border border-black">
                     <form className="space-y-6" onSubmit={handleSubmit}>
                         <div>
-                            <label className="block text-sm font-medium text-white">User ID</label>
+                            <label className="block text-sm font-medium text-white">User ID or Email</label>
                             <div className="mt-1 relative rounded-md shadow-sm">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <Mail className="h-5 w-5 text-gray-400" />
@@ -54,7 +111,7 @@ export default function Login() {
                                     value={formData.uniqueId}
                                     onChange={(e) => setFormData({ ...formData, uniqueId: e.target.value })}
                                     className="block w-full pl-10 sm:text-sm border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 py-2 border bg-gray-50 outline-none"
-                                    placeholder="UserId"
+                                    placeholder="User ID or email"
                                 />
                             </div>
                         </div>
@@ -105,7 +162,7 @@ export default function Login() {
                     </div>
 
                     <div className="mt-4 text-center">
-                        <button onClick={() => setShowForgot(true)} className="text-sm text-blue-500 hover:text-green-600 text-md hover:underline">Forgot password?</button>
+                        <button type="button" onClick={() => setShowForgot(true)} className="text-sm text-blue-500 hover:text-green-600 text-md hover:underline">Forgot password?</button>
                     </div>
                 </div>
             </div>
@@ -117,40 +174,33 @@ export default function Login() {
                         {forgotStep === 1 ? (
                             <>
                                 <p className="text-sm text-gray-600">Enter your registered email to receive an OTP.</p>
-                                <input value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="Enter your registered email" className="w-full mt-3 p-2 border rounded" />
+                                <input type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="Enter your registered email" className="w-full mt-3 p-2 border rounded" />
                                 <div className="mt-4 flex justify-end gap-2">
-                                    <button onClick={() => setShowForgot(false)} className="px-3 py-1">Cancel</button>
-                                    <button onClick={async () => {
-                                        if (!forgotEmail) { toast.error('Please enter your email'); return; }
-                                        try {
-                                            await axiosInstance.post('/auth/forgot-password', { email: forgotEmail });
-                                            setForgotStep(2);
-                                            toast.success('OTP sent to your email');
-                                        } catch (err) {
-                                            toast.error(err.response?.data?.message || 'Failed to send OTP');
-                                        }
-                                    }} className="px-3 py-1 bg-green-600 text-gray-100 rounded">Send OTP</button>
+                                    <button type="button" onClick={closeForgot} className="px-3 py-1">Cancel</button>
+                                    <button type="button" disabled={isForgotBusy} onClick={sendResetOtp} className="px-3 py-1 bg-green-600 text-gray-100 rounded disabled:opacity-50">
+                                        {isForgotBusy ? 'Sending...' : 'Send OTP'}
+                                    </button>
                                 </div>
                             </>
                         ) : (
                             <>
-                                <p className="text-sm text-gray-600">Enter the OTP and your new password.</p>
-                                <input value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="OTP" className="w-full mt-3 p-2 border rounded" />
-                                <input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password" type="password" className="w-full mt-3 p-2 border rounded" />
-                                <div className="mt-4 flex justify-end gap-2">
-                                    <button onClick={() => { setShowForgot(false); setForgotStep(1); }} className="px-3 py-1">Cancel</button>
-                                    <button onClick={async () => {
-                                        if (!otp || !newPassword) { toast.error('OTP and new password are required'); return; }
-                                        try {
-                                            await axiosInstance.post('/auth/reset-password', { email: forgotEmail, otp, newPassword });
-                                            toast.success('Password reset successful. Please login.');
-                                            setShowForgot(false);
-                                            setForgotStep(1);
-                                            setOtp(''); setNewPassword(''); setForgotEmail('');
-                                        } catch (err) {
-                                            toast.error(err.response?.data?.message || 'Failed to reset password');
-                                        }
-                                    }} className="px-3 py-1 bg-indigo-600 text-white rounded">Reset Password</button>
+                                <p className="text-sm text-gray-600">Enter the OTP sent to {forgotEmail.trim()} and your new password.</p>
+                                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mt-2">
+                                    For your security, resetting the password creates new encryption keys.
+                                    Messages you received before the reset can't be decrypted afterwards.
+                                </p>
+                                <input value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="OTP" inputMode="numeric" autoComplete="one-time-code" className="w-full mt-3 p-2 border rounded" />
+                                <input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password (min 6 characters)" type="password" autoComplete="new-password" className="w-full mt-3 p-2 border rounded" />
+                                <div className="mt-4 flex justify-between items-center gap-2">
+                                    <button type="button" disabled={isForgotBusy || otpCooldown > 0} onClick={sendResetOtp} className="text-sm text-blue-600 disabled:text-gray-400">
+                                        {otpCooldown > 0 ? `Resend OTP in ${otpCooldown}s` : 'Resend OTP'}
+                                    </button>
+                                    <div className="flex gap-2">
+                                        <button type="button" onClick={closeForgot} className="px-3 py-1">Cancel</button>
+                                        <button type="button" disabled={isForgotBusy} onClick={resetPassword} className="px-3 py-1 bg-indigo-600 text-white rounded disabled:opacity-50">
+                                            {isForgotBusy ? 'Resetting...' : 'Reset Password'}
+                                        </button>
+                                    </div>
                                 </div>
                             </>
                         )}

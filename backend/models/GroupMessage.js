@@ -33,6 +33,11 @@ const groupMessageSchema = new mongoose.Schema(
             type: String,
             default: "",
         },
+        // IV of the client-side encrypted image. Empty = legacy unencrypted image.
+        imageIv: {
+            type: String,
+            default: "",
+        },
         deleted: {
             type: Boolean,
             default: false,

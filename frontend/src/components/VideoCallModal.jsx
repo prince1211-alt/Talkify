@@ -1,257 +1,285 @@
 import { useEffect, useRef, useState } from "react";
+import toast from "react-hot-toast";
 import { useCallStore } from "../store/useCallStore";
 import { useChatStore } from "../store/useChatStore";
-import { PhoneOff, Mic, MicOff, Video as VideoIcon, VideoOff, CircleDot, Loader2, UploadCloud } from "lucide-react";
+import {
+    PhoneOff, Mic, MicOff, Video as VideoIcon, VideoOff, CircleDot, Square, Volume2, Loader2,
+} from "lucide-react";
 import { axiosInstance } from "../lib/axios";
+
+const RECORDING_TYPES = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+
+const formatDuration = (ms) => {
+    const total = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(total / 3600);
+    const m = String(Math.floor((total % 3600) / 60)).padStart(2, "0");
+    const s = String(total % 60).padStart(2, "0");
+    return h ? `${h}:${m}:${s}` : `${m}:${s}`;
+};
+
+// Uploads the recorded audio, then posts the AI summary into the chat the call belongs to.
+// Runs outside the component so it finishes even after the call window closes.
+const summarizeRecording = (blob, target) => {
+    if (!blob.size) {
+        toast.error("Nothing was recorded.");
+        return;
+    }
+    const ext = blob.type.includes("mp4") ? "m4a" : blob.type.includes("ogg") ? "ogg" : "webm";
+    const formData = new FormData();
+    formData.append("audio", blob, `meeting.${ext}`);
+
+    const job = axiosInstance.post("/meeting/summarize", formData).then(async (res) => {
+        if (!res.data?.success) throw new Error(res.data?.message || "Summary failed");
+        const sent = await useChatStore.getState().sendMessage(
+            { text: `🤖 Meeting Summary:\n\n${res.data.summary}` },
+            target
+        );
+        if (!sent) throw new Error("Could not post the summary");
+    });
+
+    toast.promise(job, {
+        loading: "Summarizing the meeting…",
+        success: "Meeting summary sent to the chat",
+        error: (err) => err.response?.data?.message || err.message || "Failed to summarize meeting audio",
+    });
+};
 
 export default function VideoCallModal() {
     const {
-        localStream,
+        callStatus,
+        callTitle,
+        isGroupCall,
+        callStartedAt,
+        participants,
         remoteStreams,
-        isCalling,
-        endCall,
-        targetUserId,
-        isVideoMuted,
+        localStream,
         isAudioMuted,
-        toggleLocalVideo,
-        toggleLocalAudio
+        isVideoMuted,
+        isVideoBusy,
+        isRecording,
+        chatTarget,
+        hangUp,
+        toggleAudio,
+        toggleVideo,
+        setRecording,
     } = useCallStore();
-    const { socket, selectedGroup } = useChatStore();
+    const users = useChatStore((state) => state.users);
+    const groups = useChatStore((state) => state.groups);
 
-    const localVideoRef = useRef(null);
-    const mediaRecorderRef = useRef(null);
-    const recordedChunksRef = useRef([]);
+    const recordingRef = useRef(null); // { recorder, audioCtx, chunks, target }
+    const elapsed = useElapsed(callStatus === "active" ? callStartedAt : null);
 
-    // Recording states
-    const [isRecording, setIsRecording] = useState(false);
-    const [isUploading, setIsUploading] = useState(false);
+    const stopRecordingAndSummarize = () => {
+        const session = recordingRef.current;
+        if (!session) return;
+        recordingRef.current = null;
+        setRecording(false);
 
+        session.recorder.onstop = () => {
+            session.audioCtx.close().catch(() => {});
+            const type = (session.recorder.mimeType || "audio/webm").split(";")[0];
+            summarizeRecording(new Blob(session.chunks, { type }), session.target);
+        };
+        session.recorder.stop();
+    };
+
+    // If the call ends while recording (e.g. the other side hangs up), still produce the summary
     useEffect(() => {
-        if (localVideoRef.current && localStream && localVideoRef.current.srcObject !== localStream) {
-            localVideoRef.current.srcObject = localStream;
-        }
-    }, [localStream]);
+        if (callStatus === "idle" && recordingRef.current) stopRecordingAndSummarize();
+    });
 
-    const handleToggleAudio = () => {
-        toggleLocalAudio();
-    };
+    if (callStatus === "idle") return null;
 
-    const handleToggleVideo = () => {
-        toggleLocalVideo();
-    };
-
-    // Recording Logic
+    // Mix our mic and every participant's audio into one recording
     const startRecording = () => {
-        if (!localStream) return;
-        recordedChunksRef.current = [];
-        const options = { mimeType: 'audio/webm' };
-
+        if (!localStream || typeof MediaRecorder === "undefined") {
+            toast.error("Recording isn't supported in this browser.");
+            return;
+        }
         try {
-            // 1. Initialize AudioContext
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            const audioCtx = new AudioContext();
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            const audioCtx = new AudioCtx();
+            const destination = audioCtx.createMediaStreamDestination();
 
-            // 2. Create destination node
-            const dest = audioCtx.createMediaStreamDestination();
-
-            // 3. Add local audio to destination
-            if (localStream.getAudioTracks().length > 0) {
-                const localSource = audioCtx.createMediaStreamSource(
-                    new MediaStream([localStream.getAudioTracks()[0]])
-                );
-                localSource.connect(dest);
-            }
-
-            // 4. Add all remote audio to destination
-            Object.values(remoteStreams).forEach(remoteStream => {
-                if (remoteStream.getAudioTracks().length > 0) {
-                    const remoteSource = audioCtx.createMediaStreamSource(
-                        new MediaStream([remoteStream.getAudioTracks()[0]])
-                    );
-                    remoteSource.connect(dest);
-                }
+            [localStream, ...Object.values(remoteStreams)].forEach((stream) => {
+                const track = stream?.getAudioTracks()[0];
+                if (track) audioCtx.createMediaStreamSource(new MediaStream([track])).connect(destination);
             });
 
-            // 5. Use the mixed destination stream for MediaRecorder
-            mediaRecorderRef.current = new MediaRecorder(dest.stream, options);
-            mediaRecorderRef.current.ondataavailable = (e) => {
-                if (e.data.size > 0) {
-                    recordedChunksRef.current.push(e.data);
-                }
+            const mimeType = RECORDING_TYPES.find((type) => MediaRecorder.isTypeSupported(type));
+            const recorder = new MediaRecorder(destination.stream, mimeType ? { mimeType } : undefined);
+            const chunks = [];
+            recorder.ondataavailable = (e) => {
+                if (e.data.size > 0) chunks.push(e.data);
             };
 
-            // Keep a reference to the audio context to close it later
-            mediaRecorderRef.current.audioCtx = audioCtx;
-
-            mediaRecorderRef.current.start();
-            setIsRecording(true);
+            recordingRef.current = { recorder, audioCtx, chunks, target: chatTarget };
+            recorder.start(1000);
+            setRecording(true);
         } catch (e) {
             console.error("Recording error:", e);
-            alert("Microphone recording not supported on this browser.");
+            toast.error("Could not start recording.");
         }
     };
 
-    const stopRecordingAndUpload = async () => {
-        if (mediaRecorderRef.current && isRecording) {
-            mediaRecorderRef.current.onstop = async () => {
-                setIsUploading(true);
-                const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
-                const formData = new FormData();
-                formData.append("audio", blob, "meeting.webm");
-
-                try {
-                    // Add auth header or rely on cookies
-                    const res = await axiosInstance.post("/meeting/summarize", formData, {
-                        headers: { "Content-Type": "multipart/form-data" }
-                    });
-
-                    if (res.data.success) {
-                        // 1. Send the summary as a message in the current chat
-                        const summaryText = `🤖 **Meeting Summary:**\n\n${res.data.summary}`;
-                        useChatStore.getState().sendMessage({ text: summaryText });
-
-                        // 2. Broadcast summary to everyone (if needed)
-                        if (socket) {
-                            socket.emit("broadcastGroupSummary", res.data.summary);
-                        }
-                    }
-                } catch (error) {
-                    console.error("Failed to summarize meeting:", error);
-                    alert("Failed to summarize meeting audio.");
-                } finally {
-                    setIsUploading(false);
-                    setIsRecording(false);
-                    // Close audio context
-                    if (mediaRecorderRef.current?.audioCtx) {
-                        mediaRecorderRef.current.audioCtx.close();
-                    }
-                }
-            };
-
-            mediaRecorderRef.current.stop();
-        }
+    const handleHangUp = () => {
+        if (recordingRef.current) stopRecordingAndSummarize();
+        hangUp();
     };
 
-    const handleEndCall = () => {
-        if (isRecording) {
-            stopRecordingAndUpload();
+    const nameFor = (userId) => {
+        const fromCall = participants[userId]?.name;
+        if (fromCall) return fromCall;
+        const contact = users.find((u) => String(u._id) === String(userId));
+        if (contact) return contact.fullName;
+        for (const group of groups) {
+            const member = group.members?.find((m) => String(m._id) === String(userId));
+            if (member) return member.fullName;
         }
-
-        // Robust target selection: use stored targetUserId, or fallback to first remote stream
-        const fallbackId = Object.keys(remoteStreams)[0];
-        const target = selectedGroup ? "all" : (targetUserId || fallbackId);
-
-        if (target) {
-            const eventName = selectedGroup ? "webrtc:leave-call" : "webrtc:end-call";
-            socket?.emit(eventName, {
-                to: target,
-                groupId: selectedGroup?._id
-            });
-        }
-
-        endCall();
+        return "Participant";
     };
 
-    if (!isCalling && !localStream) return null;
+    const remoteIds = Object.keys(participants);
+    const spotlight = remoteIds.length === 1;
+
+    let statusText = "";
+    if (callStatus === "outgoing") statusText = isGroupCall ? "Ringing members…" : "Ringing…";
+    else if (callStatus === "connecting") statusText = "Connecting…";
+    else if (remoteIds.length === 0) statusText = "Waiting for others to join…";
+    else statusText = elapsed;
+
+    const localTile = (
+        <VideoTile
+            stream={localStream}
+            name="You"
+            isLocal
+            audioOn={!isAudioMuted}
+            videoOn={!isVideoMuted}
+            recording={isRecording}
+        />
+    );
+
+    const remoteTile = (userId, large = false) => {
+        const info = participants[userId] || {};
+        return (
+            <VideoTile
+                key={userId}
+                stream={remoteStreams[userId]}
+                name={nameFor(userId)}
+                audioOn={info.audio !== false}
+                videoOn={info.video !== false}
+                recording={info.recording}
+                connection={info.connection}
+                large={large}
+            />
+        );
+    };
+
+    const tileCount = remoteIds.length + 1;
+    const gridCols =
+        tileCount <= 1 ? "grid-cols-1"
+            : tileCount === 2 ? "grid-cols-1 sm:grid-cols-2"
+                : tileCount <= 4 ? "grid-cols-2"
+                    : tileCount <= 6 ? "grid-cols-2 lg:grid-cols-3"
+                        : "grid-cols-3 lg:grid-cols-4";
 
     return (
-        <div className="fixed inset-0 bg-black/95 z-50 flex flex-col backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-gray-950 z-50 flex flex-col text-white">
             {/* Header */}
-            <div className="p-6 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent absolute top-0 w-full z-10">
-                <h2 className="text-white text-xl font-medium tracking-wide">Talkify Call</h2>
-
+            <div className="absolute top-0 inset-x-0 z-20 px-4 sm:px-6 py-4 flex items-center justify-between gap-3 bg-gradient-to-b from-black/80 to-transparent">
+                <div className="min-w-0">
+                    <h2 className="text-lg font-semibold truncate">{callTitle || "Talkify Call"}</h2>
+                    <p className="text-sm text-gray-300 tabular-nums">{statusText}</p>
+                </div>
                 {isRecording && (
-                    <div className="flex items-center gap-2 px-4 py-1.5 bg-red-500/20 border border-red-500/50 rounded-full">
-                        <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.7)]" />
-                        <span className="text-red-500 font-semibold text-sm">Recording Audio...</span>
-                    </div>
-                )}
-
-                {isUploading && (
-                    <div className="flex items-center gap-2 px-4 py-1.5 bg-blue-500/20 border border-blue-500/50 rounded-full">
-                        <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
-                        <span className="text-blue-500 font-semibold text-sm">Summarizing Meeting...</span>
+                    <div className="flex items-center gap-2 px-3 py-1 bg-red-500/20 border border-red-500/50 rounded-full shrink-0">
+                        <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+                        <span className="text-red-400 font-semibold text-xs sm:text-sm">Recording audio</span>
                     </div>
                 )}
             </div>
 
-            {/* Video Grid */}
-            <div className="flex-1 p-6 md:p-12 mb-20 flex pt-24 items-center justify-center">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-7xl mx-auto auto-rows-fr">
-
-                    {/* Local Video */}
-                    <div className="relative rounded-2xl overflow-hidden bg-gray-900 border border-gray-800 shadow-2xl group flex flex-col justify-end min-h-[300px]">
-                        <video
-                            ref={localVideoRef}
-                            autoPlay
-                            playsInline
-                            muted
-                            className={`w-full h-full object-cover absolute inset-0 ${isVideoMuted ? 'opacity-0' : 'opacity-100'}`}
-                            onLoadedMetadata={(e) => e.target.play().catch(console.error)}
-                        />
-                        {isVideoMuted && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900">
-                                <div className="w-20 h-20 rounded-full bg-gray-800 flex items-center justify-center">
-                                    <VideoOff className="w-8 h-8 text-gray-400" />
-                                </div>
-                                <span className="mt-4 text-gray-400 text-sm font-medium">Camera is off</span>
-                            </div>
-                        )}
-                        <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end">
-                            <span className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-white text-sm font-medium border border-white/10">
-                                You {!isAudioMuted ? "🎤" : "🔇"}
-                            </span>
+            {/* Video area */}
+            <div className="flex-1 min-h-0 relative">
+                {remoteIds.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center gap-4 p-6">
+                        <div className="w-28 h-28 rounded-full bg-indigo-600 flex items-center justify-center text-4xl font-bold">
+                            {(callTitle || "?").charAt(0).toUpperCase()}
+                        </div>
+                        <p className="text-gray-300 flex items-center gap-2">
+                            {callStatus !== "active" && <Loader2 className="w-4 h-4 animate-spin" />}
+                            {statusText}
+                        </p>
+                        <div className="absolute bottom-28 right-4 w-32 sm:w-56 aspect-[3/4] sm:aspect-video rounded-xl overflow-hidden shadow-2xl border border-white/10">
+                            {localTile}
                         </div>
                     </div>
-
-                    {/* Remote Streams */}
-                    {Object.entries(remoteStreams).map(([userId, stream]) => (
-                        <RemoteVideo key={userId} stream={stream} userId={userId} />
-                    ))}
-
-                </div>
+                ) : spotlight ? (
+                    <div className="h-full relative">
+                        {remoteTile(remoteIds[0], true)}
+                        <div className="absolute bottom-28 right-4 w-32 sm:w-56 aspect-[3/4] sm:aspect-video rounded-xl overflow-hidden shadow-2xl border border-white/10 z-10">
+                            {localTile}
+                        </div>
+                    </div>
+                ) : (
+                    <div className={`grid ${gridCols} auto-rows-fr gap-2 sm:gap-3 h-full px-2 sm:px-4 pt-20 pb-28`}>
+                        <div className="rounded-xl overflow-hidden min-h-0">{localTile}</div>
+                        {remoteIds.map((userId) => (
+                            <div key={userId} className="rounded-xl overflow-hidden min-h-0">{remoteTile(userId)}</div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Controls */}
-            <div className="absolute bottom-0 w-full p-8 bg-gradient-to-t from-black/90 to-transparent flex justify-center gap-6">
-                <button
-                    onClick={handleToggleAudio}
-                    className={`p-4 rounded-full transition-all shadow-lg ${isAudioMuted ? "bg-red-500 hover:bg-red-600 text-white" : "bg-gray-800 hover:bg-gray-700 text-white"
-                        }`}
+            <div className="absolute bottom-0 inset-x-0 z-20 p-4 sm:p-6 flex justify-center items-center gap-3 sm:gap-5 bg-gradient-to-t from-black/90 to-transparent">
+                <ControlButton
+                    onClick={toggleAudio}
+                    active={!isAudioMuted}
+                    label={isAudioMuted ? "Unmute microphone" : "Mute microphone"}
                 >
                     {isAudioMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-                </button>
+                </ControlButton>
 
-                <button
-                    onClick={handleToggleVideo}
-                    className={`p-4 rounded-full transition-all shadow-lg ${isVideoMuted ? "bg-red-500 hover:bg-red-600 text-white" : "bg-gray-800 hover:bg-gray-700 text-white"
-                        }`}
+                <ControlButton
+                    onClick={toggleVideo}
+                    active={!isVideoMuted}
+                    disabled={isVideoBusy}
+                    label={isVideoMuted ? "Turn camera on" : "Turn camera off"}
                 >
-                    {isVideoMuted ? <VideoOff className="w-6 h-6" /> : <VideoIcon className="w-6 h-6" />}
-                </button>
+                    {isVideoBusy ? <Loader2 className="w-6 h-6 animate-spin" />
+                        : isVideoMuted ? <VideoOff className="w-6 h-6" /> : <VideoIcon className="w-6 h-6" />}
+                </ControlButton>
 
-                {!isRecording ? (
+                {isRecording ? (
                     <button
-                        onClick={startRecording}
-                        className="p-4 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-lg shadow-indigo-500/30 flex items-center gap-2 px-6"
+                        type="button"
+                        onClick={stopRecordingAndSummarize}
+                        className="h-14 px-4 sm:px-6 rounded-full bg-blue-600 hover:bg-blue-700 flex items-center gap-2 shadow-lg transition-colors"
+                        title="Stop recording and summarize"
                     >
-                        <CircleDot className="w-6 h-6" />
-                        <span className="font-semibold px-1">Record Audio</span>
+                        <Square className="w-5 h-5" />
+                        <span className="font-semibold hidden sm:inline">Stop &amp; Summarize</span>
                     </button>
                 ) : (
                     <button
-                        onClick={stopRecordingAndUpload}
-                        disabled={isUploading}
-                        className="p-4 rounded-full bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-lg shadow-blue-500/30 flex items-center gap-2 px-6 disabled:opacity-50"
+                        type="button"
+                        onClick={startRecording}
+                        disabled={callStatus !== "active"}
+                        className="h-14 px-4 sm:px-6 rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg transition-colors"
+                        title="Record call audio for an AI summary (everyone in the call is notified)"
                     >
-                        <UploadCloud className="w-6 h-6" />
-                        <span className="font-semibold px-1">Summarize</span>
+                        <CircleDot className="w-5 h-5" />
+                        <span className="font-semibold hidden sm:inline">Record</span>
                     </button>
                 )}
 
                 <button
-                    onClick={handleEndCall}
-                    className="p-4 rounded-full bg-red-500 hover:bg-red-600 text-white transition-all shadow-lg shadow-red-500/30 w-24 flex justify-center"
+                    type="button"
+                    onClick={handleHangUp}
+                    className="h-14 w-20 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center shadow-lg shadow-red-500/30 transition-colors"
+                    aria-label="End call"
+                    title="End call"
                 >
                     <PhoneOff className="w-6 h-6" />
                 </button>
@@ -260,39 +288,124 @@ export default function VideoCallModal() {
     );
 }
 
-// Helper component for remote video to manage its own ref
-function RemoteVideo({ stream, userId }) {
-    const videoRef = useRef(null);
-    const users = useChatStore(state => state.users);
-    const selectedGroup = useChatStore(state => state.selectedGroup);
+function ControlButton({ onClick, active, disabled, label, children }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            aria-label={label}
+            title={label}
+            aria-pressed={!active}
+            className={`h-14 w-14 rounded-full flex items-center justify-center shadow-lg transition-colors disabled:opacity-60 ${active ? "bg-gray-700 hover:bg-gray-600" : "bg-red-500 hover:bg-red-600"
+                }`}
+        >
+            {children}
+        </button>
+    );
+}
 
-    let user = users.find(u => String(u._id) === String(userId));
-    if (!user && selectedGroup) {
-        user = selectedGroup.members.find(m => String(m._id) === String(userId));
-    }
-
-    const displayName = user ? (user.fullName || user.uniqueId) : `User ${userId.slice(-4)}`;
-
+// Ticks once per second while the call is active
+function useElapsed(startedAt) {
+    const [now, setNow] = useState(() => Date.now());
     useEffect(() => {
-        if (videoRef.current && stream && videoRef.current.srcObject !== stream) {
-            videoRef.current.srcObject = stream;
+        if (!startedAt) return undefined;
+        const id = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(id);
+    }, [startedAt]);
+    return startedAt ? formatDuration(now - startedAt) : "";
+}
+
+// One participant: video (kept mounted so audio keeps playing), avatar when the camera is off,
+// name, mic/recording indicators and connection status.
+function VideoTile({ stream, name, isLocal = false, audioOn, videoOn, recording, connection, large = false }) {
+    const videoRef = useRef(null);
+    const [needsTap, setNeedsTap] = useState(false);
+    // Re-render when tracks are muted/unmuted/added (the MediaStream object itself stays the same)
+    useCallStore((state) => state.mediaVersion);
+
+    const tracks = stream ? stream.getTracks() : [];
+    const trackKey = tracks.map((t) => t.id).join(",");
+    const videoTrack = tracks.find((t) => t.kind === "video" && t.readyState === "live");
+    const showVideo = Boolean(videoTrack) && !videoTrack.muted && videoOn !== false;
+    const reconnecting = connection === "disconnected" || connection === "failed";
+    const connecting = !isLocal && (!stream || connection === "new" || connection === "connecting");
+
+    // Re-attach only when the set of tracks changes (camera turned on/off), so audio isn't interrupted
+    useEffect(() => {
+        const el = videoRef.current;
+        if (!el) return;
+        el.srcObject = null;
+        el.srcObject = stream || null;
+        if (stream) {
+            el.play()
+                .then(() => setNeedsTap(false))
+                .catch((err) => {
+                    if (err.name === "NotAllowedError") setNeedsTap(true);
+                });
         }
-    }, [stream, userId]);
+    }, [stream, trackKey]);
+
+    const resumePlayback = () => {
+        videoRef.current?.play().then(() => setNeedsTap(false)).catch(() => {});
+    };
 
     return (
-        <div className="relative rounded-2xl overflow-hidden bg-gray-900 border border-gray-800 shadow-2xl flex flex-col justify-end min-h-[300px]">
+        <div className={`relative w-full h-full bg-gray-900 overflow-hidden ${large ? "" : "rounded-xl"}`}>
             <video
                 ref={videoRef}
                 autoPlay
                 playsInline
-                className="w-full h-full object-cover absolute inset-0"
-                onLoadedMetadata={(e) => e.target.play().catch(console.error)}
+                muted={isLocal}
+                className={`absolute inset-0 w-full h-full object-cover ${isLocal ? "-scale-x-100" : ""} ${showVideo ? "opacity-100" : "opacity-0"}`}
             />
-            <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end">
-                <span className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-white text-sm font-medium border border-white/10">
-                    {displayName}
+
+            {!showVideo && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                    <div className={`${large ? "w-28 h-28 text-4xl" : "w-16 h-16 text-2xl"} rounded-full bg-gray-700 flex items-center justify-center font-bold`}>
+                        {(name || "?").charAt(0).toUpperCase()}
+                    </div>
+                    {connecting ? (
+                        <span className="text-xs text-gray-400 flex items-center gap-1">
+                            <Loader2 className="w-3 h-3 animate-spin" /> Connecting…
+                        </span>
+                    ) : videoOn === false ? (
+                        <span className="text-xs text-gray-400">Camera off</span>
+                    ) : null}
+                </div>
+            )}
+
+            {reconnecting && (
+                <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-sm gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Reconnecting…
+                </div>
+            )}
+
+            {needsTap && !isLocal && (
+                <button
+                    type="button"
+                    onClick={resumePlayback}
+                    className="absolute inset-0 m-auto h-12 w-48 bg-white text-gray-900 rounded-full flex items-center justify-center gap-2 font-semibold z-10"
+                >
+                    <Volume2 className="w-5 h-5" /> Tap to hear audio
+                </button>
+            )}
+
+            <div className={`absolute flex items-center gap-1.5 ${large ? "left-4 bottom-28 max-w-[50%]" : "left-2 bottom-2 max-w-[90%]"}`}>
+                <span className="bg-black/60 backdrop-blur px-2 py-1 rounded-md text-xs sm:text-sm font-medium truncate">
+                    {name}
                 </span>
+                {audioOn === false && (
+                    <span className="bg-red-500/90 rounded-md p-1" title="Microphone off">
+                        <MicOff className="w-3.5 h-3.5" />
+                    </span>
+                )}
+                {recording && !isLocal && (
+                    <span className="bg-red-500/90 rounded-md px-1.5 py-0.5 text-[10px] font-bold" title="Recording audio">
+                        REC
+                    </span>
+                )}
             </div>
         </div>
     );
-};
+}
