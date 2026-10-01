@@ -1,331 +1,65 @@
 # Talkify
 
-**Private real-time messaging with end-to-end encryption, group chats, HD video calls and AI meeting summaries.**
-
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-7-646CFF?logo=vite&logoColor=white)
-![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=nodedotjs&logoColor=white)
-![Express](https://img.shields.io/badge/Express-5-000000?logo=express&logoColor=white)
-![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose%209-47A248?logo=mongodb&logoColor=white)
-![Socket.io](https://img.shields.io/badge/Socket.io-4-010101?logo=socketdotio&logoColor=white)
-![WebRTC](https://img.shields.io/badge/WebRTC-P2P%20calls-333333?logo=webrtc&logoColor=white)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-3-06B6D4?logo=tailwindcss&logoColor=white)
-
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Architecture](#architecture)
-- [How End-to-End Encryption Works](#how-end-to-end-encryption-works)
-- [How Video Calls Work](#how-video-calls-work)
-- [Project Structure](#project-structure)
-- [Getting Started](#getting-started)
-- [Environment Variables](#environment-variables)
-- [Deployment](#deployment)
-- [REST API Reference](#rest-api-reference)
-- [Socket.io Events](#socketio-events)
-- [Data Models](#data-models)
-- [Security](#security)
-- [Limits and Defaults](#limits-and-defaults)
-- [Known Limitations and Roadmap](#known-limitations-and-roadmap)
-- [Contributing](#contributing)
-- [License](#license)
-
----
-
-## Overview
-
-Talkify is a full-stack chat application built with the MERN stack, Socket.io and WebRTC.
-
-- **Messages stay private.** Text and images are encrypted in the browser. The server only stores ciphertext.
-- **Everything is real time.** Messages, online status, group changes and calls are pushed over Socket.io.
-- **Calls are peer-to-peer.** Video and audio flow directly between browsers. The server only exchanges connection details.
-- **Meetings can be summarized.** Call audio can be recorded and turned into a short AI summary that is posted to the chat.
-
----
+Talkify is a real-time chat application with end-to-end encrypted messaging, group chats, video calls and AI meeting summaries.
 
 ## Features
 
-### 💬 Messaging
-- One-to-one chats with contacts added by their **User ID**
-- Text messages and image messages (with optional caption)
-- Real-time delivery to every open tab and device of a user
-- Unread counters per chat and group
-- Online / offline status of contacts
-- Delete messages (the content is wiped on the server, a "Message deleted" placeholder stays)
-- New conversations appear automatically in both users' contact lists
-
-### 👥 Group Chats
-- Create groups from your contacts
-- Group admin can add members (by User ID), remove members and delete the group
-- Any member can leave; admin rights move to another member if the admin leaves
-- Sender names shown on group messages
-- Members join and leave group rooms instantly, without a page refresh
-
-### 🔐 End-to-End Encryption
-- RSA-OAEP 2048-bit key pair per user, created in the browser at signup
-- Every message encrypted with a fresh AES-256-GCM key
-- Images and captions are encrypted too
-- Private key protected by the user's password (PBKDF2-SHA256, 600,000 iterations)
-- Private key kept in the browser as a **non-extractable** key in IndexedDB
-
-### 📹 Video Calls
-- One-to-one and **group video calls** (every participant connects to every other one)
-- 720p / 30 fps capture with automatic quality adjustment on weak networks
-- Mute / unmute microphone and turn the camera on / off; other participants see the state
-- Ringtone, caller name, "busy", "declined", "no answer" and "missed call" handling
-- Join a group call that is already running by pressing the call button again
-- Automatic recovery from short connection drops (ICE restart and socket rejoin)
-- Responsive call screen: spotlight view for two people, grid for groups
-
-### 🤖 AI Meeting Summary
-- Record the call audio (all participants are notified while recording)
-- Speech-to-text with **Whisper large-v3-turbo** and a 3–5 point summary with **Llama 3.3 70B** via Groq
-- Works with English, Hindi, Hinglish and other languages; the summary is always in English
-- The summary is posted as an encrypted message to the chat the call belongs to
-
-### 👤 Accounts
-- Sign up with email verification by OTP
-- Log in with User ID or email
-- Forgot password with OTP reset
-- Sessions with JWT (24 hours); logging out clears the session cookie and the stored key
-
-### 📱 Responsive UI
-- Works on desktop and mobile; on phones the contact list and chat are shown one at a time with a back button
-
----
+- **Private chats**: one-to-one messaging with text and images
+- **Group chats**: create groups, add or remove members, leave or delete groups
+- **End-to-end encryption**: messages and images are encrypted in the browser; the server only stores encrypted data
+- **Video calls**: one-to-one and group video calls with mute and camera controls
+- **AI meeting summary**: record call audio and get a short summary posted in the chat
+- **Real-time updates**: new messages, online status and group changes appear instantly
+- **Email OTP verification** for signup and password reset
+- **Responsive design** for desktop and mobile
 
 ## Tech Stack
 
-### Frontend
+**Frontend**
+- React 19 + Vite
+- Zustand (state management)
+- Tailwind CSS
+- Socket.io Client
+- WebRTC (video calls)
+- Web Crypto API (encryption)
 
-| Technology | Purpose |
-| --- | --- |
-| **React 19** | UI library |
-| **Vite 7** | Dev server and production build |
-| **React Router 7** | Routing (`/`, `/login`, `/signup`) |
-| **Zustand 5** | State management (auth, chat and call stores) |
-| **Tailwind CSS 3** | Styling |
-| **Axios** | HTTP client with auth and session-expiry interceptors |
-| **Socket.io Client 4** | Real-time events and call signaling |
-| **Web Crypto API** | RSA-OAEP, AES-GCM and PBKDF2 encryption |
-| **IndexedDB** | Storage for the non-extractable private key |
-| **WebRTC** | Peer-to-peer audio and video |
-| **MediaRecorder + Web Audio API** | Mixing and recording call audio |
-| **lucide-react** | Icons |
-| **react-hot-toast** | Notifications |
-
-### Backend
-
-| Technology | Purpose |
-| --- | --- |
-| **Node.js (18+)** | Runtime (uses built-in `fetch`) |
-| **Express 5** | REST API |
-| **MongoDB + Mongoose 9** | Database and models |
-| **Socket.io 4** | Real-time events, presence and call signaling |
-| **jsonwebtoken** | Authentication tokens (HS256) |
-| **bcrypt** | Password hashing |
-| **Multer** | File uploads (images, call audio) |
-| **Cloudinary** | Image storage (encrypted files stored as raw assets) |
-| **Groq SDK** | Whisper transcription and Llama summaries |
-| **Brevo / Resend APIs, Nodemailer** | OTP emails (HTTPS APIs first, SMTP as fallback) |
-| **cors, cookie-parser, dotenv** | Origin control, cookies, configuration |
-
-### External Services
-
-| Service | Used for | Required |
-| --- | --- | --- |
-| MongoDB (e.g. Atlas) | Data storage | Yes |
-| Brevo, Resend or any SMTP server | OTP emails | Yes in production |
-| Cloudinary | Image storage | For image messages |
-| Groq | Meeting summaries | Optional |
-| TURN server (e.g. Metered, Twilio, coturn) | Calls across strict NATs / mobile networks | Recommended |
-
----
-
-## Architecture
-
-```mermaid
-flowchart LR
-    subgraph Browser["Browser (React app)"]
-        UI["UI components"]
-        Stores["Zustand stores<br/>auth · chat · call"]
-        Crypto["Web Crypto<br/>+ IndexedDB key"]
-        RTC["WebRTC"]
-    end
-
-    subgraph Server["Node.js server"]
-        API["Express REST API"]
-        WS["Socket.io<br/>presence · chat events · call signaling"]
-    end
-
-    DB[("MongoDB")]
-    CDN["Cloudinary"]
-    Mail["Brevo / Resend / SMTP"]
-    AI["Groq<br/>Whisper + Llama"]
-    TURN["STUN / TURN"]
-
-    UI --> Stores
-    Stores --> Crypto
-    Stores -- "HTTPS + JWT" --> API
-    Stores -- "WebSocket + JWT" --> WS
-    API --> DB
-    WS --> DB
-    API --> CDN
-    API --> Mail
-    API --> AI
-    RTC <-- "audio / video (peer-to-peer)" --> RTC2["Other participants"]
-    RTC -.-> TURN
-```
-
-**Request flow for a message**
-
-1. The browser encrypts the message and sends ciphertext + wrapped keys to the REST API.
-2. The API stores it in MongoDB and emits it over Socket.io to the sender's and receiver's rooms.
-3. Each recipient's browser unwraps the AES key with its private key and decrypts the message.
-
----
-
-## How End-to-End Encryption Works
-
-### Keys
-
-| Key | Algorithm | Where it lives |
-| --- | --- | --- |
-| Public key | RSA-OAEP 2048, SHA-256 | Server (readable by other users) |
-| Private key (stored copy) | Encrypted with AES-256-GCM, key from PBKDF2-SHA256 (600k iterations, random salt) | Server (useless without the password) |
-| Private key (active copy) | Non-extractable `CryptoKey` | Browser IndexedDB |
-| Message key | AES-256-GCM, new for every message | Wrapped with RSA-OAEP for every recipient |
-
-### Sending a message
-
-```mermaid
-sequenceDiagram
-    participant A as Sender browser
-    participant S as Server
-    participant B as Receiver browser
-
-    A->>A: Create a random AES-256 key
-    A->>A: Encrypt text and image (separate random IVs)
-    A->>S: Fetch receiver public key (or all group members' keys)
-    A->>A: Wrap the AES key for each recipient and for the sender
-    A->>S: Send ciphertext + IVs + wrapped keys
-    S->>S: Store ciphertext only
-    S-->>B: Push the new message (Socket.io)
-    B->>B: Unwrap the AES key with the private key
-    B->>B: Decrypt text and image
-```
-
-### Important behaviour
-
-- **Login:** the stored private key is decrypted with the password and imported as a non-extractable key. Keys made by older versions (10k PBKDF2 iterations) are upgraded automatically.
-- **Password reset:** the old private key can't be recovered without the old password, so a new key pair is created. Messages received before the reset can't be decrypted afterwards. The user is warned about this before resetting.
-- **Locked keys:** if a user's keys were locked with an older password, they can create new keys at login.
-- **Server view:** the server never sees plaintext messages, images or private keys.
-
----
-
-## How Video Calls Work
-
-The server keeps track of each active call (participants, invitees, ring timer). It relays connection details only between participants of the same call. Media flows peer-to-peer.
-
-```mermaid
-sequenceDiagram
-    participant A as Caller
-    participant S as Socket.io server
-    participant B as Callee
-
-    A->>S: call:start { to }
-    S-->>B: call:incoming { callId, fromName }
-    B->>S: call:accept { callId }
-    S-->>A: call:user-joined
-    S-->>B: ack { participants: [A] }
-    B->>A: offer (via call:signal)
-    A->>B: answer (via call:signal)
-    A-->>B: ICE candidates (both ways)
-    Note over A,B: Audio and video flow peer-to-peer
-    A->>S: call:leave
-    S-->>B: call:ended
-```
-
-**Key details**
-
-- **Group calls use a mesh.** A new participant opens a connection to everyone already in the call.
-- **Negotiation** follows the WebRTC "perfect negotiation" pattern, so either side can safely renegotiate (for example when turning the camera on).
-- **Quality:** capture is 1280×720 at 30 fps. Video bitrate is capped at 2.5 Mbps for two people and shared between peers in groups (minimum 400 kbps each). Audio is sent with high network priority.
-- **Reliability:** ICE restarts after connection problems. A dropped socket has 15 seconds to reconnect and rejoin the call. Unanswered calls stop ringing after 45 seconds.
-- **ICE servers** (STUN / TURN) are served by the backend from environment variables, so TURN credentials can change without rebuilding the frontend.
-
----
+**Backend**
+- Node.js + Express 5
+- MongoDB + Mongoose
+- Socket.io
+- JWT authentication + bcrypt
+- Cloudinary (image storage)
+- Groq (speech-to-text and AI summaries)
+- Brevo / Resend / SMTP (OTP emails)
 
 ## Project Structure
 
 ```
 Talkify/
 ├── backend/
-│   ├── config/
-│   │   ├── cloudinary.js        # Cloudinary client
-│   │   ├── cors.js              # Allowed origins (FRONTEND_URL), checks for Express and Socket.io
-│   │   ├── database.js          # MongoDB connection + query injection protection
-│   │   ├── multer.js            # Image upload limits + Cloudinary upload helper
-│   │   └── socketio.js          # Socket.io server, JWT auth, presence, group rooms
-│   ├── controllers/
-│   │   ├── group.js             # Group CRUD, members, group messages, keys
-│   │   ├── meeting.js           # Audio transcription + AI summary (Groq)
-│   │   ├── message.js           # Private messages, contacts, public keys, media
-│   │   ├── user.js              # Signup, login, OTP, password reset, keys, contacts
-│   │   └── webrtc.js            # Call state + signaling, ICE server config
-│   ├── middleware/
-│   │   ├── auth.js              # JWT verification
-│   │   └── rateLimit.js         # In-memory rate limiter
-│   ├── models/                  # User, Message, Group, GroupMessage, OTP
-│   ├── routes/                  # User, Message, group, meeting, call
-│   ├── utils/
-│   │   ├── mailSender.js        # Brevo / Resend / SMTP email delivery
-│   │   └── otp.js               # OTP creation, hashing and verification
-│   ├── clearMessages.js         # Dev script: wipes messages (destructive)
-│   ├── index.js                 # App entry point
-│   └── .env.example
+│   ├── config/          # Database, CORS, Socket.io, Cloudinary, uploads
+│   ├── controllers/     # Users, messages, groups, calls, meeting summary
+│   ├── middleware/      # Authentication and rate limiting
+│   ├── models/          # User, Message, Group, GroupMessage, OTP
+│   ├── routes/          # API routes
+│   ├── utils/           # Email sending and OTP helpers
+│   └── index.js         # Server entry point
 │
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── AddContactModal.jsx
-│   │   │   ├── ChatWindow.jsx       # Conversation view, encrypted images
-│   │   │   ├── CreateGroupModal.jsx
-│   │   │   ├── GroupMembersModal.jsx
-│   │   │   ├── Sidebar.jsx          # Contacts and groups list
-│   │   │   └── VideoCallModal.jsx   # Call screen, controls, recording
-│   │   ├── lib/axios.js             # API client, session handling
-│   │   ├── pages/                   # ChatDashboard, Login, SignUp
-│   │   ├── store/
-│   │   │   ├── useAuthStore.js      # Auth + key management
-│   │   │   ├── useCallStore.js      # WebRTC calls
-│   │   │   └── useChatStore.js      # Messages, groups, sockets, encryption
-│   │   ├── utils/
-│   │   │   ├── crypto.js            # RSA / AES / PBKDF2 helpers
-│   │   │   ├── keyStore.js          # IndexedDB key storage
-│   │   │   └── ringtone.js          # Web Audio ringtone
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   ├── index.html
-│   └── .env.example
-│
-└── README.md
+└── frontend/
+    └── src/
+        ├── components/  # Chat window, sidebar, video call screen, modals
+        ├── pages/       # Login, Sign up, Chat dashboard
+        ├── store/       # Auth, chat and call state
+        ├── utils/       # Encryption helpers
+        └── lib/         # API client
 ```
-
----
 
 ## Getting Started
 
 ### Prerequisites
 
-- **Node.js 18 or newer** (20 LTS recommended) and npm
-- A **MongoDB** database (local or [MongoDB Atlas](https://www.mongodb.com/atlas))
-- A modern browser (Chrome, Edge, Firefox or Safari). Calls and encryption need `https://` or `localhost`.
+- Node.js 18 or newer
+- A MongoDB database (local or MongoDB Atlas)
 
 ### 1. Clone the repository
 
@@ -334,306 +68,80 @@ git clone https://github.com/prince1211-alt/Talkify.git
 cd Talkify
 ```
 
-### 2. Start the backend
+### 2. Run the backend
 
 ```bash
 cd backend
-cp .env.example .env      # then fill in at least MONGODB_URL and JWT_SECRET
+cp .env.example .env    # fill in your values
 npm install
-npm run dev               # http://localhost:5000
+npm run dev
 ```
 
-In development, if no email provider is configured, OTP emails are **printed to the backend console** so you can sign up locally.
+The backend runs on `http://localhost:5000`.
 
-### 3. Start the frontend
+### 3. Run the frontend
 
 ```bash
 cd frontend
 npm install
-npm run dev               # http://localhost:5173
+npm run dev
 ```
 
-In development mode the frontend always talks to `http://localhost:5000`.
+The frontend runs on `http://localhost:5173`.
 
-### 4. Try it
-
-1. Open `http://localhost:5173/signup`, enter an email and click **Send OTP**, then copy the code from the backend console.
-2. Create a second account in another browser profile or a private window.
-3. Add each other with **+** next to *Private Messages* using the User ID, then chat or start a video call.
-
-### Available scripts
-
-| Location | Command | What it does |
-| --- | --- | --- |
-| backend | `npm run dev` | Start with auto-reload (nodemon) |
-| backend | `npm start` | Start in normal mode |
-| frontend | `npm run dev` | Vite dev server |
-| frontend | `npm run build` | Production build into `frontend/dist` |
-| frontend | `npm run preview` | Preview the production build |
-| frontend | `npm run lint` | ESLint |
-
----
+> In development, if no email service is set up, the OTP code is printed in the backend terminal.
 
 ## Environment Variables
 
 ### Backend (`backend/.env`)
 
-| Variable | Required | Description |
-| --- | --- | --- |
-| `MONGODB_URL` | ✅ | MongoDB connection string |
-| `JWT_SECRET` | ✅ | Long random string used to sign tokens and hash OTPs |
-| `PORT` | | Server port (default `5000`) |
-| `NODE_ENV` | | `production` serves `frontend/dist`, uses secure cookies and disables localhost access |
-| `FRONTEND_URL` | ✅ in production* | Allowed frontend origin(s), comma separated, no trailing slash |
-| `MAIL_FROM` | ✅ for email | Sender address verified with your email provider |
-| `MAIL_FROM_NAME` | | Sender name (default `Talkify`) |
-| `BREVO_API_KEY` | one provider | Brevo HTTPS API key (recommended) |
-| `RESEND_API_KEY` | one provider | Resend API key (`MAIL_FROM` must use a verified domain) |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | one provider | SMTP settings (often blocked on free cloud hosts) |
-| `MAIL_PROVIDER` | | Force `brevo`, `resend` or `smtp` |
-| `TURN_URLS` | recommended | TURN server URLs, comma separated |
-| `TURN_USERNAME`, `TURN_CREDENTIAL` | recommended | TURN credentials |
-| `STUN_URLS` | | Custom STUN servers (default: Google STUN) |
-| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | for images | Cloudinary account |
-| `GROQ_API_KEY` | optional | Enables meeting summaries |
+| Variable | Description |
+| --- | --- |
+| `MONGODB_URL` | MongoDB connection string |
+| `JWT_SECRET` | Secret key for login tokens |
+| `PORT` | Server port (default `5000`) |
+| `NODE_ENV` | `development` or `production` |
+| `FRONTEND_URL` | Frontend URL allowed to use the API (e.g. `https://your-app.vercel.app`) |
+| `MAIL_FROM` | Sender email address (verified with your email provider) |
+| `BREVO_API_KEY` | Brevo API key for OTP emails (or use `RESEND_API_KEY` / `SMTP_*`) |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Cloudinary account for images |
+| `GROQ_API_KEY` | Groq API key for meeting summaries (optional) |
+| `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL` | TURN server for calls on strict networks (optional) |
 
-\* Not needed when the backend also serves the built frontend (same origin).
-
-> **Origin rule:** requests from browsers on any site not listed in `FRONTEND_URL` are rejected with **403**. The backend's own origin is always allowed. `localhost` is allowed only when `NODE_ENV` is not `production`.
+See `backend/.env.example` for the full list.
 
 ### Frontend (`frontend/.env`)
 
 | Variable | Description |
 | --- | --- |
-| `VITE_BACKEND_URL` | Backend URL for production builds (e.g. `https://talkify-api.onrender.com`). Leave empty when the backend serves the frontend. |
-
----
+| `VITE_BACKEND_URL` | Backend URL used in production (e.g. `https://your-backend.onrender.com`) |
 
 ## Deployment
 
-### Option A: frontend and backend on separate hosts (e.g. Vercel + Render)
+**Separate frontend and backend (e.g. Vercel + Render)**
 
-**Backend (Render web service)**
+- Backend: root `backend`, build `npm install`, start `npm start`, set `NODE_ENV=production` and `FRONTEND_URL`
+- Frontend: root `frontend`, build `npm run build`, output `dist`, set `VITE_BACKEND_URL`
 
-| Setting | Value |
-| --- | --- |
-| Root directory | `backend` |
-| Build command | `npm install` |
-| Start command | `npm start` |
-| Environment | `NODE_ENV=production`, `FRONTEND_URL=https://<your-frontend-domain>` plus the variables above |
+**Single server**
 
-**Frontend (Vercel / Netlify)**
-
-| Setting | Value |
-| --- | --- |
-| Root directory | `frontend` |
-| Build command | `npm run build` |
-| Output directory | `dist` |
-| Environment | `VITE_BACKEND_URL=https://<your-backend-domain>` |
-
-Add a rewrite of all paths to `/index.html` on the frontend host so routes like `/login` work on refresh.
-
-### Option B: single service (backend serves the frontend)
+Build the frontend, then start the backend with `NODE_ENV=production`. The backend serves the frontend from `frontend/dist`.
 
 ```bash
-# Build command
-cd frontend && npm install && npm run build && cd ../backend && npm install
-# Start command
-cd backend && npm start
+cd frontend && npm install && npm run build
+cd ../backend && npm install && npm start
 ```
 
-Set `NODE_ENV=production`. `FRONTEND_URL` is not needed because the frontend uses the same origin.
+## Scripts
 
-### Production checklist
-
-- [ ] `FRONTEND_URL` matches the exact frontend origin (scheme + domain, no trailing slash)
-- [ ] Email provider configured and `MAIL_FROM` verified. Send one test OTP.
-- [ ] TURN server configured. Test a call between two different networks (e.g. Wi-Fi and mobile data).
-- [ ] Cloudinary configured. Send one image.
-- [ ] HTTPS on both frontend and backend (required for camera, microphone and Web Crypto)
-- [ ] Health check endpoint: `GET /api/health`
-
----
-
-## REST API Reference
-
-All routes are prefixed with `/api`. 🔒 = requires `Authorization: Bearer <token>`.
-
-### Auth: `/api/auth`
-
-| Method | Route | Description |
+| Folder | Command | Description |
 | --- | --- | --- |
-| POST | `/sendotp` | Send a signup OTP to an email |
-| POST | `/signup` | Create an account (needs OTP, public key and encrypted private key) |
-| POST | `/login` | Log in with User ID or email |
-| POST | `/logout` | Clear the session cookie |
-| GET | `/me` 🔒 | Current user profile |
-| PUT | `/keys` 🔒 | Upgrade or replace encryption keys (needs current password) |
-| POST | `/add-contact` 🔒 | Add a contact by User ID |
-| POST | `/forgot-password` | Send a password-reset OTP |
-| POST | `/reset-password` | Reset password with OTP and a new key pair |
+| backend | `npm run dev` | Start the server with auto-reload |
+| backend | `npm start` | Start the server |
+| frontend | `npm run dev` | Start the development server |
+| frontend | `npm run build` | Build for production |
+| frontend | `npm run lint` | Check code with ESLint |
 
-### Messages: `/api/messages`
+## Author
 
-| Method | Route | Description |
-| --- | --- | --- |
-| GET | `/users` 🔒 | Contact list |
-| GET | `/keys/:id` 🔒 | A user's public key |
-| GET | `/media?url=` 🔒 | Encrypted image fallback (only this app's Cloudinary raw files) |
-| GET | `/:id` 🔒 | Conversation with a user |
-| POST | `/send/:id` 🔒 | Send a message (JSON, or multipart with an encrypted `image`) |
-| POST | `/:id/mark-read` 🔒 | Mark a conversation as read |
-| DELETE | `/:id` 🔒 | Delete a message |
-
-### Groups: `/api/groups`
-
-| Method | Route | Description |
-| --- | --- | --- |
-| POST | `/create` 🔒 | Create a group |
-| GET | `/my-groups` 🔒 | Groups the user belongs to |
-| GET | `/:groupId/messages` 🔒 | Group messages (members only) |
-| GET | `/:groupId/keys` 🔒 | Members' public keys (members only) |
-| POST | `/:groupId/send` 🔒 | Send a group message |
-| DELETE | `/:groupId/messages/:messageId` 🔒 | Delete a group message (sender or admin) |
-| DELETE | `/:groupId` 🔒 | Delete the group (admin) |
-| POST | `/:groupId/add` 🔒 | Add a member (admin) |
-| DELETE | `/:groupId/remove/:memberId` 🔒 | Remove a member (admin) |
-| POST | `/:groupId/leave` 🔒 | Leave the group |
-
-### Calls and meetings
-
-| Method | Route | Description |
-| --- | --- | --- |
-| GET | `/api/call/ice-servers` 🔒 | STUN / TURN configuration |
-| POST | `/api/meeting/summarize` 🔒 | Upload call audio (`audio` field), returns transcript and summary |
-| GET | `/api/health` | Health check |
-
----
-
-## Socket.io Events
-
-Connect with `io(BACKEND_URL, { auth: { token } })`. The server identifies the user from the token.
-
-### Chat and presence (server → client)
-
-| Event | Payload | Meaning |
-| --- | --- | --- |
-| `getOnlineUsers` | `userId[]` | Users currently online |
-| `newMessage` | message | New private message |
-| `newGroupMessage` | group message | New group message |
-| `messageDeleted` | `{ messageId, chatType }` | A message was deleted |
-| `contactAdded` | `{ user }` | Someone new started a chat with you |
-| `addedToGroup` | group | You were added to a group |
-| `removedFromGroup` / `leftGroup` | `{ groupId }` | You are no longer in a group |
-| `groupUpdated` | `{ groupId, members, createdBy }` | Members or admin changed |
-| `groupDeleted` | `groupId` | Group deleted |
-
-Client → server: `joinGroup(groupId)` (members only) and `leaveGroup(groupId)`. The server also joins all of a user's group rooms on connect.
-
-### Calls
-
-| Direction | Event | Payload |
-| --- | --- | --- |
-| client → server | `call:start` | `{ to }` or `{ groupId }` (with ack) |
-| client → server | `call:accept` / `call:reject` | `{ callId }` |
-| client → server | `call:leave` | `{ callId }` |
-| client → server | `call:rejoin` | `{ callId }` (after a reconnect, with ack) |
-| both | `call:signal` | `{ callId, to / from, description?, candidate? }` |
-| both | `call:media-state` | `{ callId, audio, video, recording }` |
-| server → client | `call:incoming` | `{ callId, from, fromName, isGroup, groupId, groupName }` |
-| server → client | `call:user-joined` / `call:user-left` | `{ callId, userId, name? }` |
-| server → client | `call:declined` | `{ callId, userId, name }` (group calls) |
-| server → client | `call:ended` | `{ callId, reason: ended \| rejected \| no-answer }` |
-| server → client | `call:cancelled` | `{ callId, reason }` (stop ringing) |
-
----
-
-## Data Models
-
-| Model | Main fields |
-| --- | --- |
-| **User** | `fullName`, `uniqueId`, `email`, `password` (bcrypt), `publicKey`, `encryptedPrivateKey`, `contacts[]`, `profilePic`, `passwordChangedAt` |
-| **Message** | `senderId`, `receiverId`, `text` (ciphertext), `iv`, `encryptedKeyForSender`, `encryptedKeyForReceiver`, `image`, `imageIv`, `seen`, `deleted` |
-| **Group** | `name`, `members[]`, `createdBy` |
-| **GroupMessage** | `groupId`, `senderId`, `senderName`, `text` (ciphertext), `iv`, `encryptedKeysMap` (userId → wrapped key), `image`, `imageIv`, `deleted` |
-| **OTP** | `email`, `purpose` (`signup` / `reset`), `otpHash`, `attempts`, `createdAt` (expires after 5 minutes) |
-
-All models use `createdAt` / `updatedAt` timestamps (OTP uses `createdAt` only).
-
----
-
-## Security
-
-| Area | Protection |
-| --- | --- |
-| Message privacy | End-to-end encryption for text and images; server stores ciphertext only |
-| Key storage | Password-encrypted private key on the server; non-extractable key in the browser |
-| Passwords | bcrypt hashing; minimum 6 characters |
-| Sessions | JWT (HS256, 24 h); tokens issued before a password reset are rejected |
-| Cross-site access | Origin allowlist on the API and on Socket.io (including WebSocket upgrades) |
-| Socket identity | Socket.io connections authenticated with the JWT; user ID never taken from the client |
-| Call signaling | Relayed only between participants of the same call |
-| Injection | Mongoose `sanitizeFilter` plus string-only input handling |
-| Data exposure | Contact and member lists contain public profile fields only |
-| OTP | Secure random 6-digit code, stored as an HMAC, single use, 5 attempts, 60 s resend cooldown, 5 min expiry |
-| Brute force | Rate limits on login, OTP and verification routes |
-| Uploads | Size limits and file-type checks; call recordings are deleted right after processing |
-| Recording consent | All participants see a notice and a "REC" badge while audio is recorded |
-
----
-
-## Limits and Defaults
-
-| Item | Value |
-| --- | --- |
-| Image upload | Compressed in the browser to max 1280 px; 8 MB upload limit; 20 MB original file limit |
-| Call audio upload | 25 MB |
-| Message length | 5,000 characters in the input box |
-| OTP | 6 digits, 5 minutes, 5 attempts, 60 s cooldown |
-| Login rate limit | 10 attempts per account per IP per 15 minutes |
-| OTP request limit | 10 per IP per 15 minutes |
-| Ring timeout | 45 seconds |
-| Reconnect grace (calls) | 15 seconds |
-| Video | 1280×720 at 30 fps; max 2.5 Mbps (1-on-1) |
-
----
-
-## Known Limitations and Roadmap
-
-**Current limitations**
-- Group calls use a mesh: each person uploads one stream per participant, so they work best with small groups (about 4–6 people).
-- Rate limits and active calls are kept in memory, which suits a single server instance. Running several instances would need a shared store such as Redis and the Socket.io Redis adapter.
-- Messages are loaded without pagination.
-- Public keys are trusted as served by the server (no safety-number verification yet).
-- Messages received before a password reset can't be decrypted after it.
-- There is no automated test suite in the repository yet.
-
-**Ideas for the future**
-- [ ] Message pagination and search
-- [ ] Read receipts and typing indicators
-- [ ] Safety-number / key fingerprint verification
-- [ ] Audio-only calls and screen sharing
-- [ ] SFU (e.g. LiveKit or mediasoup) for larger group calls
-- [ ] Profile picture upload in the UI (backend support exists)
-- [ ] Automated tests and CI
-- [ ] Remove unused backend dependencies and stop tracking `backend/node_modules`
-
----
-
-## Contributing
-
-1. Fork the repository and create a branch: `git checkout -b feature/my-feature`
-2. Make your changes and run `npm run lint` in `frontend`
-3. Commit with a clear message and open a pull request describing what changed and how you tested it
-
-Please don't commit `.env` files or other secrets.
-
----
-
-## License
-
-This project does not include a license file yet. Add one (for example MIT) before accepting outside contributions or reusing the code.
-
----
-
-<p align="center">Built by <a href="https://github.com/prince1211-alt">prince1211-alt</a></p>
+[prince1211-alt](https://github.com/prince1211-alt)
