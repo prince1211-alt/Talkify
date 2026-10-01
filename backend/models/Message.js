@@ -39,6 +39,12 @@ const messageSchema = new mongoose.Schema(
       type: String, // Cloudinary URL
     },
 
+    // IV of the client-side encrypted image. Empty = legacy unencrypted image.
+    imageIv: {
+      type: String,
+      default: "",
+    },
+
     seen: {
       type: Boolean,
       default: false,

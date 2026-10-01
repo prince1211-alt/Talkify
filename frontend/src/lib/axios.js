@@ -1,9 +1,13 @@
 import axios from "axios";
+import { clearSessionKeys } from "../utils/keyStore";
+
+// Backend origin ("" = same origin, when the backend serves the built frontend)
+export const BACKEND_URL = import.meta.env.MODE === "development"
+    ? "http://localhost:5000"
+    : (import.meta.env.VITE_BACKEND_URL || "").replace(/\/+$/, "");
 
 export const axiosInstance = axios.create({
-    baseURL: import.meta.env.MODE === "development"
-        ? "http://localhost:5000/api"
-        : import.meta.env.VITE_BACKEND_URL ? `${import.meta.env.VITE_BACKEND_URL.replace(/\/+$/, '')}/api` : "/api",
+    baseURL: `${BACKEND_URL}/api`,
     withCredentials: true,
 });
 
@@ -11,23 +15,38 @@ export const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use((config) => {
     try {
         const user = JSON.parse(localStorage.getItem("chat-user"));
-        if (user?.token) {
+        if (user?.token && !config.headers["Authorization"]) {
             config.headers["Authorization"] = `Bearer ${user.token}`;
         }
-    } catch (_) { }
+    } catch {
+        // corrupted localStorage entry — send the request without a token
+    }
     return config;
 });
+
+let isLoggingOut = false;
+
+// Session is gone (expired token, password changed elsewhere): wipe local data and go to login
+export const forceLogout = async () => {
+    if (isLoggingOut) return;
+    isLoggingOut = true;
+    localStorage.removeItem("chat-user");
+    await clearSessionKeys().catch(() => {});
+    window.location.href = "/login";
+};
+
+// These endpoints return 401 for a wrong password etc. — that must not reload the page
+const PUBLIC_AUTH_ENDPOINTS = ["/auth/login", "/auth/signup", "/auth/sendotp", "/auth/forgot-password", "/auth/reset-password"];
 
 // Handle 401 Unauthorized globally
 axiosInstance.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response && error.response.status === 401) {
-            // Token is invalid or expired
-            localStorage.removeItem("chat-user");
-            window.location.href = "/login";
+        const url = error.config?.url || "";
+        const isPublicAuthCall = PUBLIC_AUTH_ENDPOINTS.some((path) => url.startsWith(path));
+        if (error.response?.status === 401 && !isPublicAuthCall && localStorage.getItem("chat-user")) {
+            forceLogout();
         }
         return Promise.reject(error);
     }
 );
-

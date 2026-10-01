@@ -1,23 +1,51 @@
+const mongoose = require("mongoose");
 const Group = require("../models/Group");
 const GroupMessage = require("../models/GroupMessage");
 const User = require("../models/User");
-const { io, getReceiverSocketId } = require("../config/socketio");
-const cloudinary = require("../config/cloudinary");
+const { io } = require("../config/socketio");
+const { uploadBufferToCloudinary } = require("../config/multer");
+
+// Only public profile fields — never emails or encrypted private keys
+const MEMBER_FIELDS = "fullName uniqueId profilePic status";
+const MAX_CIPHERTEXT_LENGTH = 100000;
+
+const str = (value) => (typeof value === "string" ? value : "");
+const isValidId = (id) => mongoose.isObjectIdOrHexString(id);
+const groupRoom = (groupId) => `group:${groupId}`;
+const isMemberOf = (group, userId) => group.members.some((m) => String(m._id || m) === String(userId));
+const populateGroup = (groupId) => Group.findById(groupId).populate("members", MEMBER_FIELDS);
+
+const emitGroupUpdated = (group) => {
+    io.to(groupRoom(group._id)).emit("groupUpdated", {
+        groupId: String(group._id),
+        members: group.members,
+        createdBy: group.createdBy,
+    });
+};
 
 // ============================
 // CREATE GROUP
 // ============================
 exports.createGroup = async (req, res) => {
     try {
-        const { name, memberIds } = req.body;
-        const creatorId = req.user._id || req.user.id;
+        const body = req.body || {};
+        const name = str(body.name).trim();
+        const creatorId = req.user.id;
+        const memberIds = Array.isArray(body.memberIds) ? body.memberIds.filter(isValidId).map(String) : [];
 
-        if (!name || !memberIds || memberIds.length === 0) {
+        if (!name || memberIds.length === 0) {
             return res.status(400).json({ success: false, message: "Name and at least one member required" });
+        }
+        if (name.length > 100) {
+            return res.status(400).json({ success: false, message: "Group name is too long" });
         }
 
         // Always include creator in members
-        const allMembers = Array.from(new Set([...memberIds, creatorId.toString()]));
+        const allMembers = Array.from(new Set([...memberIds, creatorId]));
+        const found = await User.countDocuments({ _id: mongoose.trusted({ $in: allMembers }) });
+        if (found !== allMembers.length) {
+            return res.status(400).json({ success: false, message: "Some selected users do not exist" });
+        }
 
         const group = await Group.create({
             name,
@@ -25,7 +53,14 @@ exports.createGroup = async (req, res) => {
             createdBy: creatorId,
         });
 
-        const populated = await Group.findById(group._id).populate("members", "-password");
+        const populated = await populateGroup(group._id);
+
+        // Put every member's open tabs in the group room and show them the new group
+        io.in(allMembers).socketsJoin(groupRoom(group._id));
+        allMembers
+            .filter((id) => id !== creatorId)
+            .forEach((id) => io.to(id).emit("addedToGroup", populated));
+
         return res.status(201).json({ success: true, group: populated });
     } catch (err) {
         console.error("createGroup error:", err);
@@ -38,10 +73,8 @@ exports.createGroup = async (req, res) => {
 // ============================
 exports.getMyGroups = async (req, res) => {
     try {
-        const userId = req.user._id || req.user.id;
-
-        const groups = await Group.find({ members: userId })
-            .populate("members", "-password")
+        const groups = await Group.find({ members: req.user.id })
+            .populate("members", MEMBER_FIELDS)
             .sort({ updatedAt: -1 });
 
         return res.json(groups);
@@ -57,14 +90,12 @@ exports.getMyGroups = async (req, res) => {
 exports.getGroupMessages = async (req, res) => {
     try {
         const { groupId } = req.params;
-        const userId = req.user._id || req.user.id;
+        if (!isValidId(groupId)) return res.status(400).json({ success: false, message: "Invalid group id" });
 
         // Verify user is a member
         const group = await Group.findById(groupId);
         if (!group) return res.status(404).json({ success: false, message: "Group not found" });
-
-        const isMember = group.members.some((m) => m.toString() === userId.toString());
-        if (!isMember) return res.status(403).json({ success: false, message: "Not a member" });
+        if (!isMemberOf(group, req.user.id)) return res.status(403).json({ success: false, message: "Not a member" });
 
         const messages = await GroupMessage.find({ groupId })
             .populate("senderId", "fullName profilePic")
@@ -87,45 +118,62 @@ exports.getGroupMessages = async (req, res) => {
 };
 
 // ============================
-// SEND GROUP MESSAGE (supports optional image via multipart)
+// SEND GROUP MESSAGE (text and/or image, both encrypted on the client)
 // ============================
 exports.sendGroupMessage = async (req, res) => {
     try {
         const { groupId } = req.params;
-        const { text, encryptedKeysMap, iv } = req.body;
-        const userId = req.user._id || req.user.id;
+        const body = req.body || {};
+        const senderId = req.user.id;
+        const text = str(body.text);
+        const iv = str(body.iv);
+        const imageIv = str(body.imageIv);
 
-        const user = await User.findById(userId);
-        const senderName = user?.fullName || "Unknown";
-        const senderId = userId;
+        if (!isValidId(groupId)) return res.status(400).json({ success: false, message: "Invalid group id" });
+        if (!text && !req.file) return res.status(400).json({ success: false, message: "Message is empty" });
+        if (text.length > MAX_CIPHERTEXT_LENGTH) {
+            return res.status(413).json({ success: false, message: "Message is too long" });
+        }
 
         const group = await Group.findById(groupId);
         if (!group) return res.status(404).json({ success: false, message: "Group not found" });
+        if (!isMemberOf(group, senderId)) return res.status(403).json({ success: false, message: "Not a member" });
 
-        const isMember = group.members.some((m) => m.toString() === senderId.toString());
-        if (!isMember) return res.status(403).json({ success: false, message: "Not a member" });
-
-        let imageUrl = "";
-        if (req.file) {
-            const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
-            const upload = await cloudinary.uploader.upload(dataUri);
-            imageUrl = upload.secure_url || "";
+        // Multipart requests send the keys map as a JSON string
+        let keysMap = body.encryptedKeysMap;
+        if (typeof keysMap === "string") {
+            try {
+                keysMap = JSON.parse(keysMap);
+            } catch {
+                keysMap = null;
+            }
         }
+        const encryptedKeysMap = {};
+        if (keysMap && typeof keysMap === "object" && !Array.isArray(keysMap)) {
+            for (const [memberId, wrappedKey] of Object.entries(keysMap)) {
+                if (isMemberOf(group, memberId) && typeof wrappedKey === "string" && wrappedKey.length <= 2000) {
+                    encryptedKeysMap[memberId] = wrappedKey;
+                }
+            }
+        }
+
+        const user = await User.findById(senderId).select("fullName");
+        const imageUrl = req.file ? await uploadBufferToCloudinary(req.file, { encrypted: Boolean(imageIv) }) : "";
 
         const message = await GroupMessage.create({
             groupId,
             senderId,
-            senderName,
+            senderName: user?.fullName || "Unknown",
             text,
             encryptedKeysMap,
             iv,
-            image: imageUrl
+            image: imageUrl,
+            imageIv: imageUrl ? imageIv : "",
         });
 
-        // Emit to socket room for this group
         // Convert to plain object so Mongoose Map serializes correctly for all clients
         const messageObj = message.toObject({ flattenMaps: true });
-        io.to(`group:${groupId}`).emit("newGroupMessage", messageObj);
+        io.to(groupRoom(groupId)).emit("newGroupMessage", messageObj);
 
         return res.status(201).json(messageObj);
     } catch (err) {
@@ -135,17 +183,20 @@ exports.sendGroupMessage = async (req, res) => {
 };
 
 // ============================
-// GET GROUP PUBLIC KEYS
+// GET GROUP PUBLIC KEYS (members only)
 // ============================
 exports.getGroupKeys = async (req, res) => {
     try {
         const { groupId } = req.params;
+        if (!isValidId(groupId)) return res.status(400).json({ success: false, message: "Invalid group id" });
+
         const group = await Group.findById(groupId).populate("members", "publicKey");
         if (!group) return res.status(404).json({ success: false, message: "Group not found" });
+        if (!isMemberOf(group, req.user.id)) return res.status(403).json({ success: false, message: "Not a member" });
 
         const keysMap = {};
         group.members.forEach(member => {
-            keysMap[member._id.toString()] = member.publicKey;
+            if (member) keysMap[member._id.toString()] = member.publicKey;
         });
 
         return res.json({ success: true, keysMap });
@@ -156,24 +207,37 @@ exports.getGroupKeys = async (req, res) => {
 };
 
 // ============================
-// DELETE GROUP MESSAGE (soft)
+// DELETE GROUP MESSAGE (soft — content is wiped)
 // ============================
 exports.deleteGroupMessage = async (req, res) => {
     try {
         const { groupId, messageId } = req.params;
-        const userId = req.user._id || req.user.id;
+        const userId = req.user.id;
+        if (!isValidId(groupId) || !isValidId(messageId)) {
+            return res.status(400).json({ success: false, message: "Invalid id" });
+        }
 
-        const message = await GroupMessage.findById(messageId);
-        if (!message) return res.status(404).json({ success: false, message: "Message not found" });
+        const [group, message] = await Promise.all([Group.findById(groupId), GroupMessage.findById(messageId)]);
+        if (!group || !message || String(message.groupId) !== groupId) {
+            return res.status(404).json({ success: false, message: "Message not found" });
+        }
 
-        if (message.senderId.toString() !== userId.toString() && !req.user.isAdmin) {
+        // Sender or the group admin may delete
+        const isSender = message.senderId.toString() === userId;
+        const isGroupAdmin = group.createdBy.toString() === userId;
+        if (!isSender && !isGroupAdmin) {
             return res.status(403).json({ success: false, message: "Not authorized to delete this message" });
         }
 
         message.deleted = true;
+        message.text = "";
+        message.iv = "";
+        message.image = "";
+        message.imageIv = "";
+        message.encryptedKeysMap = {};
         await message.save();
 
-        io.to(`group:${groupId}`).emit("messageDeleted", {
+        io.to(groupRoom(groupId)).emit("messageDeleted", {
             messageId: message._id,
             chatType: "group",
             groupId,
@@ -192,13 +256,13 @@ exports.deleteGroupMessage = async (req, res) => {
 exports.deleteGroup = async (req, res) => {
     try {
         const { groupId } = req.params;
-        const userId = req.user._id || req.user.id;
+        if (!isValidId(groupId)) return res.status(400).json({ success: false, message: "Invalid group id" });
 
         const group = await Group.findById(groupId);
         if (!group) return res.status(404).json({ success: false, message: "Group not found" });
 
         // Only creator can delete
-        if (group.createdBy.toString() !== userId.toString()) {
+        if (group.createdBy.toString() !== req.user.id) {
             return res.status(403).json({ success: false, message: "Only the creator can delete the group" });
         }
 
@@ -206,8 +270,9 @@ exports.deleteGroup = async (req, res) => {
         // Clean up messages
         await GroupMessage.deleteMany({ groupId });
 
-        // Emit to the room that group is deleted
-        io.to(`group:${groupId}`).emit("groupDeleted", groupId);
+        // Emit to the room that group is deleted, then empty the room
+        io.to(groupRoom(groupId)).emit("groupDeleted", groupId);
+        io.in(groupRoom(groupId)).socketsLeave(groupRoom(groupId));
 
         return res.json({ success: true, message: "Group deleted successfully" });
     } catch (err) {
@@ -223,31 +288,36 @@ exports.deleteGroup = async (req, res) => {
 exports.removeMember = async (req, res) => {
     try {
         const { groupId, memberId } = req.params;
-        const userId = req.user._id || req.user.id;
+        if (!isValidId(groupId) || !isValidId(memberId)) {
+            return res.status(400).json({ success: false, message: "Invalid id" });
+        }
 
         const group = await Group.findById(groupId);
         if (!group) return res.status(404).json({ success: false, message: "Group not found" });
 
-        // Only creator or admin can remove others
-        if (group.createdBy.toString() !== userId.toString() && !req.user.isAdmin) {
+        // Only creator can remove others
+        if (group.createdBy.toString() !== req.user.id) {
             return res.status(403).json({ success: false, message: "Not authorized to remove members" });
         }
 
         // Don't allow removing the creator
-        if (group.createdBy.toString() === memberId.toString()) {
+        if (group.createdBy.toString() === memberId) {
             return res.status(400).json({ success: false, message: "Cannot remove the group creator" });
         }
+        if (!isMemberOf(group, memberId)) {
+            return res.status(400).json({ success: false, message: "User is not in this group" });
+        }
 
-        group.members = group.members.filter(m => m.toString() !== memberId.toString());
+        group.members = group.members.filter(m => m.toString() !== memberId);
         await group.save();
+        const populated = await populateGroup(groupId);
 
-        // Notify group room of updated members
-        io.to(`group:${groupId}`).emit("groupUpdated", { groupId, members: group.members });
-
-        // Notify removed member directly
+        // Removed member must stop receiving this group's messages
+        io.in(memberId).socketsLeave(groupRoom(groupId));
         io.to(memberId).emit("removedFromGroup", { groupId });
+        emitGroupUpdated(populated);
 
-        return res.json({ success: true, group });
+        return res.json({ success: true, group: populated });
     } catch (err) {
         console.error("removeMember error:", err);
         return res.status(500).json({ success: false, message: "Server error" });
@@ -261,33 +331,37 @@ exports.removeMember = async (req, res) => {
 exports.leaveGroup = async (req, res) => {
     try {
         const { groupId } = req.params;
-        const userId = req.user._id || req.user.id;
+        const userId = req.user.id;
+        if (!isValidId(groupId)) return res.status(400).json({ success: false, message: "Invalid group id" });
 
         const group = await Group.findById(groupId);
         if (!group) return res.status(404).json({ success: false, message: "Group not found" });
+        if (!isMemberOf(group, userId)) return res.status(400).json({ success: false, message: "Not a member" });
 
         // Remove the user from members
-        group.members = group.members.filter(m => m.toString() !== userId.toString());
+        group.members = group.members.filter(m => m.toString() !== userId);
+        io.in(userId).socketsLeave(groupRoom(groupId));
 
         // If no members left, delete group and messages
         if (group.members.length === 0) {
             await Group.findByIdAndDelete(groupId);
             await GroupMessage.deleteMany({ groupId });
-            io.to(`group:${groupId}`).emit("groupDeleted", groupId);
+            io.to(userId).emit("leftGroup", { groupId });
             return res.json({ success: true, message: "Left group and group deleted as no members remain" });
         }
 
         // If the leaving user was the creator, transfer ownership to first member
-        if (group.createdBy.toString() === userId.toString()) {
+        if (group.createdBy.toString() === userId) {
             group.createdBy = group.members[0];
         }
 
         await group.save();
+        const populated = await populateGroup(groupId);
 
-        io.to(`group:${groupId}`).emit("groupUpdated", { groupId, members: group.members });
+        emitGroupUpdated(populated);
         io.to(userId).emit("leftGroup", { groupId });
 
-        return res.json({ success: true, group });
+        return res.json({ success: true, group: populated });
     } catch (err) {
         console.error("leaveGroup error:", err);
         return res.status(500).json({ success: false, message: "Server error" });
@@ -300,8 +374,8 @@ exports.leaveGroup = async (req, res) => {
 exports.addMember = async (req, res) => {
     try {
         const { groupId } = req.params;
-        const { uniqueId } = req.body;
-        const userId = req.user._id || req.user.id;
+        const uniqueId = str((req.body || {}).uniqueId).trim();
+        if (!isValidId(groupId)) return res.status(400).json({ success: false, message: "Invalid group id" });
 
         if (!uniqueId) {
             return res.status(400).json({ success: false, message: "Member uniqueId is required" });
@@ -310,31 +384,30 @@ exports.addMember = async (req, res) => {
         const group = await Group.findById(groupId);
         if (!group) return res.status(404).json({ success: false, message: "Group not found" });
 
-        // Only creator or admin can add others
-        if (group.createdBy.toString() !== userId.toString() && !req.user.isAdmin) {
+        // Only creator can add others
+        if (group.createdBy.toString() !== req.user.id) {
             return res.status(403).json({ success: false, message: "Not authorized to add members" });
         }
 
-        const newMember = await User.findOne({ uniqueId });
+        const newMember = await User.findOne({ uniqueId }).select("_id");
         if (!newMember) {
             return res.status(404).json({ success: false, message: "User not found" });
         }
 
         // Check if already in group
-        if (group.members.includes(newMember._id)) {
+        if (isMemberOf(group, newMember._id)) {
             return res.status(400).json({ success: false, message: "User is already in the group" });
         }
 
         group.members.push(newMember._id);
         await group.save();
 
-        const populatedGroup = await Group.findById(groupId).populate("members", "-password");
+        const populatedGroup = await populateGroup(groupId);
+        const newMemberId = newMember._id.toString();
 
-        // Notify group room of updated members
-        io.to(`group:${groupId}`).emit("groupUpdated", { groupId, members: populatedGroup.members });
-
-        // Notify added member directly
-        io.to(newMember._id.toString()).emit("addedToGroup", populatedGroup);
+        io.in(newMemberId).socketsJoin(groupRoom(groupId));
+        emitGroupUpdated(populatedGroup);
+        io.to(newMemberId).emit("addedToGroup", populatedGroup);
 
         return res.json({ success: true, group: populatedGroup });
     } catch (err) {

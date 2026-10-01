@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
@@ -17,8 +17,16 @@ export default function SignUp() {
     });
 
     const [sendingOtp, setSendingOtp] = useState(false);
+    const [otpCooldown, setOtpCooldown] = useState(0);
     const { signup, isSigningUp } = useAuthStore();
     const navigate = useNavigate();
+
+    // Matches the server's 60 second resend limit
+    useEffect(() => {
+        if (otpCooldown <= 0) return undefined;
+        const id = setTimeout(() => setOtpCooldown((s) => s - 1), 1000);
+        return () => clearTimeout(id);
+    }, [otpCooldown]);
 
     // ✅ Common change handler
     const handleChange = (e) => {
@@ -31,28 +39,31 @@ export default function SignUp() {
 
         e.preventDefault();
 
+        if (formData.password.length < 6) {
+            return toast.error("Password must be at least 6 characters");
+        }
         if (formData.password !== formData.confirmPassword) {
             return toast.error("Passwords do not match");
         }
 
-        const { confirmPassword, ...dataToSend } = formData;
-        const success = await signup(dataToSend);
+        const { confirmPassword: _confirmPassword, ...dataToSend } = formData;
+        const success = await signup({ ...dataToSend, email: dataToSend.email.trim(), otp: dataToSend.otp.trim() });
         if (success) {
             navigate("/");
         }
-        toast.success("Account created successfully");
     };
 
     // ✅ Send OTP handler
     const handleSendOtp = async () => {
-        if (!formData.email) return toast.error("Please enter email first");
+        const email = formData.email.trim();
+        if (!email) return toast.error("Please enter email first");
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast.error("Please enter a valid email address");
 
         setSendingOtp(true);
         try {
-            await axiosInstance.post("/auth/sendotp", {
-                email: formData.email,
-            });
-            toast.success("OTP sent successfully");
+            await axiosInstance.post("/auth/sendotp", { email });
+            toast.success("OTP sent! Check your inbox (and spam folder).");
+            setOtpCooldown(60);
         } catch (error) {
             toast.error(error.response?.data?.message || "Failed to send OTP");
         } finally {
@@ -94,7 +105,7 @@ export default function SignUp() {
                             type="text"
                             value={formData.uniqueId}
                             onChange={handleChange}
-                            placeholder="UserId"
+                            placeholder="3-30 letters, numbers, . _ -"
                             icon={<User className="h-5 w-5 text-gray-400" />}
                         />
 
@@ -122,10 +133,10 @@ export default function SignUp() {
                                 <button
                                     type="button"
                                     onClick={handleSendOtp}
-                                    disabled={sendingOtp}
-                                    className="px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+                                    disabled={sendingOtp || otpCooldown > 0}
+                                    className="px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 whitespace-nowrap"
                                 >
-                                    {sendingOtp ? "Sending..." : "Send OTP"}
+                                    {sendingOtp ? "Sending..." : otpCooldown > 0 ? `Resend in ${otpCooldown}s` : "Send OTP"}
                                 </button>
                             </div>
                         </div>
@@ -136,6 +147,8 @@ export default function SignUp() {
                             labelClassName="text-white"
                             name="otp"
                             type="text"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
                             value={formData.otp}
                             onChange={handleChange}
                             placeholder="Enter 6-digit code"
@@ -204,10 +217,10 @@ export default function SignUp() {
 }
 
 /* ✅ Reusable Input Component */
-function InputField({ label, name, type, value, onChange, placeholder, icon }) {
+function InputField({ label, labelClassName = "text-gray-700", name, type, value, onChange, placeholder, icon, inputMode, autoComplete }) {
     return (
         <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className={`block text-sm font-medium ${labelClassName}`}>
                 {label}
             </label>
             <div className="mt-1 relative">
@@ -217,6 +230,8 @@ function InputField({ label, name, type, value, onChange, placeholder, icon }) {
                 <input
                     name={name}
                     type={type}
+                    inputMode={inputMode}
+                    autoComplete={autoComplete}
                     required
                     value={value}
                     onChange={onChange}

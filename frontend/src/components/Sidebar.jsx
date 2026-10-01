@@ -33,7 +33,7 @@ export default function Sidebar({ className = "" }) {
         );
 
     const filteredGroups = groups.filter(group =>
-        group.name.toLowerCase().includes(searchTerm.toLowerCase())
+        (group.name || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     if (isUsersLoading || isGroupsLoading) {
@@ -59,7 +59,7 @@ export default function Sidebar({ className = "" }) {
             {/* Header with Search */}
             <div className="p-6 border-b border-gray-100 space-y-4">
                 <div className="flex items-center justify-between">
-                    <h2 className="font-bold text-gray-900 flex items-center gap-2">
+                    <h2 className="font-bold text-white flex items-center gap-2">
                         <MessageSquare className="w-5 h-5 text-indigo-600" />
                         Conversations
                     </h2>
@@ -99,11 +99,11 @@ export default function Sidebar({ className = "" }) {
                                     }`}
                             >
                                 <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-bold shadow-indigo-100 shadow-lg shrink-0">
-                                    {group.name.charAt(0).toUpperCase()}
+                                    {(group.name || "?").charAt(0).toUpperCase()}
                                 </div>
                                 <div className="text-left flex-1 min-w-0">
-                                    <p className="font-semibold text-gray-900 truncate">{group.name}</p>
-                                    <p className="text-xs text-indigo-600 font-medium">{group.members.length} members</p>
+                                    <p className={`font-semibold truncate ${selectedGroup?._id === group._id ? "text-gray-900" : "text-white"}`}>{group.name}</p>
+                                    <p className="text-xs text-indigo-300 font-medium">{group.members.length} members</p>
                                 </div>
                                 {group.unread > 0 && (
                                     <div className="ml-2">
@@ -171,7 +171,7 @@ const UserItem = memo(({ user, isSelected, isOnline, onClick }) => (
                 {user.profilePic ? (
                     <img src={user.profilePic} alt={user.fullName} className="w-full h-full object-cover" />
                 ) : (
-                    user.fullName.charAt(0)
+                    user.fullName?.charAt(0)
                 )}
             </div>
             {isOnline && (

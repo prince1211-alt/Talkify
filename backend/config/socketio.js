@@ -1,76 +1,95 @@
 const { Server } = require("socket.io");
 const http = require("http");
 const express = require("express");
+const mongoose = require("mongoose");
 const { registerWebRTCEvents } = require("../controllers/webrtc");
+const { verifyAccessToken } = require("../middleware/auth");
+const { isOriginAllowed, allowSocketRequest } = require("./cors");
+const Group = require("../models/Group");
 
 const app = express();
 const server = http.createServer(app);
 
-// 🔹 Store online users (userId -> socketId)
-const userSocketMap = new Map();
-
-// Removing strict array since we allow dynamic Socket.io connections 
-// const allowedSocketOrigins = [
-//   /^http:\/\/localhost:\d+$/,
-//   process.env.FRONTEND_URL,
-// ].filter(Boolean);
+// 🔹 Online users: userId -> number of open sockets (tabs/devices)
+const onlineCounts = new Map();
 
 const io = new Server(server, {
   cors: {
-    origin: (origin, callback) => {
-      // Allow all origins to seamlessly support standalone and monolith deployment
-      callback(null, true);
-    },
+    origin: (origin, callback) => callback(null, isOriginAllowed(origin)),
     credentials: true,
   },
+  // Origin check for both polling and WebSocket (browsers don't apply CORS to WebSockets)
+  allowRequest: allowSocketRequest,
 });
 
-//  Helper function used in message controller 
-const getReceiverSocketId = (userId) => {
-  return userSocketMap.get(String(userId));
+const broadcastOnlineUsers = () => {
+  io.emit("getOnlineUsers", Array.from(onlineCounts.keys()));
 };
 
-io.on("connection", (socket) => {
-  const userId = socket.handshake.query.userId;
+const isUserOnline = (userId) => onlineCounts.has(String(userId));
 
-  if (userId) {
-    userSocketMap.set(userId, socket.id); // Keeping for legacy/presence check if needed
-    socket.join(userId); // Join a room named after the userId
+// 🔹 Authenticate every socket with the same JWT used for the REST API.
+// The user id comes from the verified token, never from the client.
+io.use(async (socket, next) => {
+  try {
+    const result = await verifyAccessToken(socket.handshake.auth?.token);
+    if (!result) return next(new Error("Unauthorized"));
+
+    socket.data.userId = String(result.user._id);
+    socket.data.fullName = result.user.fullName;
+    next();
+  } catch (error) {
+    console.error("socket auth error:", error.message);
+    next(new Error("Server error"));
   }
+});
 
-  // 🔹 Broadcast updated online users list
-  io.emit("getOnlineUsers", Array.from(userSocketMap.keys()));
+io.on("connection", (socket) => {
+  const userId = socket.data.userId;
+
+  socket.join(userId); // Room named after the userId (all of the user's tabs)
+  onlineCounts.set(userId, (onlineCounts.get(userId) || 0) + 1);
+  broadcastOnlineUsers();
 
   // 🔹 Register WebRTC events (1-1 and group video calls)
-  registerWebRTCEvents(io, socket, userSocketMap);
+  registerWebRTCEvents(io, socket);
 
-  // 🔹 Group Chat — join a group's socket room
-  socket.on("joinGroup", (groupId) => {
-    socket.join(`group:${groupId}`);
+  // 🔹 Group Chat — join a group's socket room (members only)
+  socket.on("joinGroup", async (groupId) => {
+    try {
+      if (!mongoose.isObjectIdOrHexString(groupId)) return;
+      const isMember = await Group.exists({ _id: groupId, members: userId });
+      if (isMember) socket.join(`group:${groupId}`);
+    } catch (error) {
+      console.error("joinGroup error:", error.message);
+    }
   });
 
   // 🔹 Group Chat — leave a group's socket room
   socket.on("leaveGroup", (groupId) => {
-    socket.leave(`group:${groupId}`);
+    if (typeof groupId === "string") socket.leave(`group:${groupId}`);
   });
 
   socket.on("disconnect", () => {
-    if (userId) {
-      // Small delay to check if user has other sockets before removing from onlineUsers
-      setTimeout(() => {
-        const hasOtherSockets = io.sockets.adapter.rooms.get(userId)?.size > 0;
-        if (!hasOtherSockets) {
-          userSocketMap.delete(userId);
-          io.emit("getOnlineUsers", Array.from(userSocketMap.keys()));
-        }
-      }, 1000);
+    const remaining = (onlineCounts.get(userId) || 1) - 1;
+    if (remaining > 0) {
+      onlineCounts.set(userId, remaining);
+    } else {
+      onlineCounts.delete(userId);
+      broadcastOnlineUsers();
     }
   });
+
+  // 🔹 Join all of the user's group rooms (also re-done automatically after a reconnect)
+  Group.find({ members: userId })
+    .select("_id")
+    .then((groups) => groups.forEach((g) => socket.join(`group:${g._id}`)))
+    .catch((error) => console.error("auto-join groups error:", error.message));
 });
 
 module.exports = {
   io,
   app,
   server,
-  getReceiverSocketId,
+  isUserOnline,
 };

@@ -47,6 +47,11 @@ const userSchema = new mongoose.Schema(
       default: ""
     },
 
+    // Set when the password is reset; JWTs issued before this are rejected
+    passwordChangedAt: {
+      type: Date
+    },
+
     contacts: [
       {
         type: mongoose.Schema.Types.ObjectId,
