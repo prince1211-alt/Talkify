@@ -1,32 +1,20 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import { Mail, Lock, User, LogIn, Loader2 } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
-import { axiosInstance } from "../lib/axios";
 
 export default function SignUp() {
     const [formData, setFormData] = useState({
         fullName: "",
-        uniqueId: "",
         email: "",
         password: "",
         confirmPassword: "",
-        otp: "",
     });
 
-    const [sendingOtp, setSendingOtp] = useState(false);
-    const [otpCooldown, setOtpCooldown] = useState(0);
     const { signup, isSigningUp } = useAuthStore();
     const navigate = useNavigate();
-
-    // Matches the server's 60 second resend limit
-    useEffect(() => {
-        if (otpCooldown <= 0) return undefined;
-        const id = setTimeout(() => setOtpCooldown((s) => s - 1), 1000);
-        return () => clearTimeout(id);
-    }, [otpCooldown]);
 
     // ✅ Common change handler
     const handleChange = (e) => {
@@ -47,27 +35,9 @@ export default function SignUp() {
         }
 
         const { confirmPassword: _confirmPassword, ...dataToSend } = formData;
-        const success = await signup({ ...dataToSend, email: dataToSend.email.trim(), otp: dataToSend.otp.trim() });
+        const success = await signup({ ...dataToSend, email: dataToSend.email.trim() });
         if (success) {
             navigate("/");
-        }
-    };
-
-    // ✅ Send OTP handler
-    const handleSendOtp = async () => {
-        const email = formData.email.trim();
-        if (!email) return toast.error("Please enter email first");
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast.error("Please enter a valid email address");
-
-        setSendingOtp(true);
-        try {
-            await axiosInstance.post("/auth/sendotp", { email });
-            toast.success("OTP sent! Check your inbox (and spam folder).");
-            setOtpCooldown(60);
-        } catch (error) {
-            toast.error(error.response?.data?.message || "Failed to send OTP");
-        } finally {
-            setSendingOtp(false);
         }
     };
 
@@ -97,62 +67,17 @@ export default function SignUp() {
                             icon={<User className="h-5 w-5 text-gray-400" />}
                         />
 
-                        {/* Unique ID */}
+                        {/* Email */}
                         <InputField
-                            label="User ID"
+                            label="Email address"
                             labelClassName="text-white"
-                            name="uniqueId"
-                            type="text"
-                            value={formData.uniqueId}
+                            name="email"
+                            type="email"
+                            autoComplete="email"
+                            value={formData.email}
                             onChange={handleChange}
-                            placeholder="3-30 letters, numbers, . _ -"
-                            icon={<User className="h-5 w-5 text-gray-400" />}
-                        />
-
-                        {/* Email + OTP */}
-                        <div>
-                            <label className="block text-sm font-medium text-white">
-                                Email address
-                            </label>
-                            <div className="mt-1 flex gap-2">
-                                <div className="relative flex-1">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <Mail className="h-5 w-5 text-gray-400" />
-                                    </div>
-                                    <input
-                                        name="email"
-                                        type="email"
-                                        required
-                                        value={formData.email}
-                                        onChange={handleChange}
-                                        className="block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 border bg-gray-50 outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                        placeholder="Enter your email"
-                                    />
-                                </div>
-
-                                <button
-                                    type="button"
-                                    onClick={handleSendOtp}
-                                    disabled={sendingOtp || otpCooldown > 0}
-                                    className="px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 whitespace-nowrap"
-                                >
-                                    {sendingOtp ? "Sending..." : otpCooldown > 0 ? `Resend in ${otpCooldown}s` : "Send OTP"}
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* OTP */}
-                        <InputField
-                            label="OTP Code"
-                            labelClassName="text-white"
-                            name="otp"
-                            type="text"
-                            inputMode="numeric"
-                            autoComplete="one-time-code"
-                            value={formData.otp}
-                            onChange={handleChange}
-                            placeholder="Enter 6-digit code"
-                            icon={<Lock className="h-5 w-5 text-gray-400" />}
+                            placeholder="you@gmail.com"
+                            icon={<Mail className="h-5 w-5 text-gray-400" />}
                         />
 
                         {/* Password */}

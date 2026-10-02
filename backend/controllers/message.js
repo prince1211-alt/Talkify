@@ -11,7 +11,7 @@ const isValidId = (id) => mongoose.isObjectIdOrHexString(id);
 const publicProfile = (user) => ({
   _id: user._id,
   fullName: user.fullName,
-  uniqueId: user.uniqueId,
+  email: user.email,
   profilePic: user.profilePic,
   status: user.status,
 });
@@ -23,7 +23,7 @@ exports.getUsersForSidebar = async (req, res) => {
   try {
     const me = await User.findById(req.user.id).populate({
       path: "contacts",
-      select: "fullName uniqueId profilePic status publicKey",
+      select: "fullName email profilePic status publicKey",
     });
     if (!me) return res.status(404).json({ message: "User not found" });
 
@@ -80,8 +80,8 @@ exports.sendMessage = async (req, res) => {
     if (text.length > MAX_CIPHERTEXT_LENGTH) return res.status(413).json({ message: "Message is too long" });
 
     const [sender, receiver] = await Promise.all([
-      User.findById(senderId).select("fullName uniqueId profilePic status contacts"),
-      User.findById(receiverId).select("fullName uniqueId profilePic status contacts"),
+      User.findById(senderId).select("fullName email profilePic status contacts"),
+      User.findById(receiverId).select("fullName email profilePic status contacts"),
     ]);
     if (!sender || !receiver) return res.status(404).json({ message: "User not found" });
 

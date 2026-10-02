@@ -8,16 +8,13 @@ const userSchema = new mongoose.Schema(
       trim: true
     },
 
-    uniqueId: {
-      type: String,
-      required: true,
-      unique: true
-    },
-
+    // Login identifier: stored lowercase, one account per email
     email: {
       type: String,
       required: true,
       unique: true,
+      lowercase: true,
+      trim: true,
     },
 
     password: {
@@ -47,7 +44,7 @@ const userSchema = new mongoose.Schema(
       default: ""
     },
 
-    // Set when the password is reset; JWTs issued before this are rejected
+    // JWTs issued before this are rejected
     passwordChangedAt: {
       type: Date
     },

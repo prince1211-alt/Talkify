@@ -10,7 +10,7 @@ Talkify is a real-time chat application with end-to-end encrypted messaging, gro
 - **Video calls**: one-to-one and group video calls with mute and camera controls
 - **AI meeting summary**: record call audio and get a short summary posted in the chat
 - **Real-time updates**: new messages, online status and group changes appear instantly
-- **Email OTP verification** for signup and password reset
+- **Email login**: sign up and log in with a unique email address and password
 - **Responsive design** for desktop and mobile
 
 ## Tech Stack
@@ -30,7 +30,6 @@ Talkify is a real-time chat application with end-to-end encrypted messaging, gro
 - JWT authentication + bcrypt
 - Cloudinary (image storage)
 - Groq (speech-to-text and AI summaries)
-- Brevo / Resend / SMTP (OTP emails)
 
 ## Architecture
 
@@ -106,7 +105,6 @@ sequenceDiagram
 ### Important behaviour
 
 - **Login:** the stored private key is decrypted with the password and imported as a non-extractable key. Keys made by older versions (10k PBKDF2 iterations) are upgraded automatically.
-- **Password reset:** the old private key can't be recovered without the old password, so a new key pair is created. Messages received before the reset can't be decrypted afterwards. The user is warned about this before resetting.
 - **Locked keys:** if a user's keys were locked with an older password, they can create new keys at login.
 - **Server view:** the server never sees plaintext messages, images or private keys.
 
@@ -149,9 +147,8 @@ Talkify/
 │   ├── config/          # Database, CORS, Socket.io, Cloudinary, uploads
 │   ├── controllers/     # Users, messages, groups, calls, meeting summary
 │   ├── middleware/      # Authentication and rate limiting
-│   ├── models/          # User, Message, Group, GroupMessage, OTP
+│   ├── models/          # User, Message, Group, GroupMessage
 │   ├── routes/          # API routes
-│   ├── utils/           # Email sending and OTP helpers
 │   └── index.js         # Server entry point
 │
 └── frontend/
@@ -198,8 +195,6 @@ npm run dev
 
 The frontend runs on `http://localhost:5173`.
 
-> In development, if no email service is set up, the OTP code is printed in the backend terminal.
-
 ## Environment Variables
 
 ### Backend (`backend/.env`)
@@ -211,8 +206,6 @@ The frontend runs on `http://localhost:5173`.
 | `PORT` | Server port (default `5000`) |
 | `NODE_ENV` | `development` or `production` |
 | `FRONTEND_URL` | Frontend URL allowed to use the API (e.g. `https://your-app.vercel.app`) |
-| `MAIL_FROM` | Sender email address (verified with your email provider) |
-| `BREVO_API_KEY` | Brevo API key for OTP emails (or use `RESEND_API_KEY` / `SMTP_*`) |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Cloudinary account for images |
 | `GROQ_API_KEY` | Groq API key for meeting summaries (optional) |
 | `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL` | TURN server for calls on strict networks (optional) |
@@ -249,15 +242,12 @@ All routes are prefixed with `/api`. 🔒 = requires `Authorization: Bearer <tok
 
 | Method | Route | Description |
 | --- | --- | --- |
-| POST | `/sendotp` | Send a signup OTP to an email |
-| POST | `/signup` | Create an account (needs OTP, public key and encrypted private key) |
-| POST | `/login` | Log in with User ID or email |
+| POST | `/signup` | Create an account with name, unique email and password (plus public key and encrypted private key) |
+| POST | `/login` | Log in with email and password |
 | POST | `/logout` | Clear the session cookie |
 | GET | `/me` 🔒 | Current user profile |
 | PUT | `/keys` 🔒 | Upgrade or replace encryption keys (needs current password) |
-| POST | `/add-contact` 🔒 | Add a contact by User ID |
-| POST | `/forgot-password` | Send a password-reset OTP |
-| POST | `/reset-password` | Reset password with OTP and a new key pair |
+| POST | `/add-contact` 🔒 | Add a contact by email |
 
 ### Messages: `/api/messages`
 
@@ -337,14 +327,13 @@ Client → server: `joinGroup(groupId)` (members only) and `leaveGroup(groupId)`
 | Message privacy | End-to-end encryption for text and images; server stores ciphertext only |
 | Key storage | Password-encrypted private key on the server; non-extractable key in the browser |
 | Passwords | bcrypt hashing; minimum 6 characters |
-| Sessions | JWT (HS256, 24 h); tokens issued before a password reset are rejected |
+| Sessions | JWT (HS256, 24 h) |
 | Cross-site access | Origin allowlist on the API and on Socket.io (including WebSocket upgrades) |
 | Socket identity | Socket.io connections authenticated with the JWT; user ID never taken from the client |
 | Call signaling | Relayed only between participants of the same call |
 | Injection | Mongoose `sanitizeFilter` plus string-only input handling |
 | Data exposure | Contact and member lists contain public profile fields only |
-| OTP | Secure random 6-digit code, stored as an HMAC, single use, 5 attempts, 60 s resend cooldown, 5 min expiry |
-| Brute force | Rate limits on login, OTP and verification routes |
+| Brute force | Rate limits on login, signup and key-update routes |
 | Uploads | Size limits and file-type checks; call recordings are deleted right after processing |
 | Recording consent | All participants see a notice and a "REC" badge while audio is recorded |
 

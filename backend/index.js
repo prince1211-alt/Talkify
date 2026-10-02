@@ -20,7 +20,6 @@ const {
   describeAllowedOrigins,
   isProduction,
 } = require("./config/cors.js");
-const { describeMailProvider } = require("./utils/mailSender.js");
 
 const userRoutes = require("./routes/User.js");
 const messageRoutes = require("./routes/Message.js");
@@ -86,6 +85,5 @@ server.listen(PORT, () => {
     console.warn("⚠️  FRONTEND_URL is not set: only the same-origin frontend can use this API.");
   }
   console.log("Allowed frontend origins:", describeAllowedOrigins());
-  console.log("Email provider:", describeMailProvider());
   connect();
 });

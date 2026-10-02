@@ -111,7 +111,7 @@ export default function CreateGroupModal({ isOpen, onClose }) {
                                     </div>
                                     <div className="flex-1 text-left">
                                         <p className="font-semibold text-gray-900 text-sm">{user.fullName}</p>
-                                        <p className="text-xs text-gray-500 truncate">{user.uniqueId}</p>
+                                        <p className="text-xs text-gray-500 truncate">{user.email}</p>
                                     </div>
                                     {selectedUsers.includes(user._id) && (
                                         <div className="bg-indigo-600 rounded-full p-1 shadow-sm">

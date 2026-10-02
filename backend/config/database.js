@@ -7,7 +7,12 @@ mongoose.set("sanitizeFilter", true);
 
 exports.connect = () => {
     mongoose.connect(process.env.MONGODB_URL)
-    .then(() => console.log("DB Connected Successfully"))
+    .then(async () => {
+        console.log("DB Connected Successfully");
+        // Accounts used to have a unique "uniqueId" username. Drop its old index,
+        // otherwise every new user (who has no uniqueId) would collide on null.
+        await mongoose.connection.collection("users").dropIndex("uniqueId_1").catch(() => {});
+    })
     .catch( (error) => {
         console.log("DB Connection Failed");
         console.error(error);
