@@ -130,10 +130,10 @@ export default function GroupMembersModal({ isOpen, onClose, members }) {
                                     <Search className="w-4 h-4 text-gray-400" />
                                 </div>
                                 <input
-                                    type="text"
+                                    type="email"
                                     value={newMemberId}
                                     onChange={(e) => setNewMemberId(e.target.value)}
-                                    placeholder="Enter user's unique ID..."
+                                    placeholder="Enter user's email..."
                                     className="block w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50"
                                 />
                             </div>
@@ -183,7 +183,7 @@ export default function GroupMembersModal({ isOpen, onClose, members }) {
                                             )}
                                         </h3>
                                         <p className="text-sm text-gray-500 truncate flex items-center gap-1">
-                                            @{member.uniqueId}
+                                            {member.email}
                                             {isOnline && (
                                                 <span className="text-xs text-green-500 font-medium">• Online</span>
                                             )}

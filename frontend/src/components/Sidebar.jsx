@@ -29,7 +29,7 @@ export default function Sidebar({ className = "" }) {
         .filter(user => user._id !== authUser?._id)
         .filter(user =>
             (user.fullName?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-            (user.uniqueId?.toLowerCase() || "").includes(searchTerm.toLowerCase())
+            (user.email?.toLowerCase() || "").includes(searchTerm.toLowerCase())
         );
 
     const filteredGroups = groups.filter(group =>
@@ -180,7 +180,7 @@ const UserItem = memo(({ user, isSelected, isOnline, onClick }) => (
         </div>
         <div className="text-left flex-1 min-w-0">
             <p className="font-semibold text-white truncate">{user.fullName}</p>
-            <p className="text-xs text-white truncate">{user.uniqueId}</p>
+            <p className="text-xs text-white truncate">{user.email}</p>
         </div>
         {user.unread > 0 && (
             <div className="pl-2">

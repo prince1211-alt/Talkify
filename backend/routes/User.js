@@ -8,11 +8,8 @@ const {
     login,
     logout,
     getMe,
-    sendotp,
     addContact,
     updateKeys,
-    forgotPassword,
-    resetPassword,
 } = require("../controllers/user");
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
@@ -22,12 +19,12 @@ const loginLimiter = rateLimit({
     windowMs: FIFTEEN_MINUTES,
     max: 10,
     message: "Too many login attempts. Please try again in a few minutes.",
-    keyGenerator: (req) => `${req.ip}:${String(req.body?.uniqueId || "").toLowerCase()}`,
+    keyGenerator: (req) => `${req.ip}:${String(req.body?.email || "").toLowerCase()}`,
 });
-const otpLimiter = rateLimit({
+const signupLimiter = rateLimit({
     windowMs: FIFTEEN_MINUTES,
     max: 10,
-    message: "Too many OTP requests. Please try again later.",
+    message: "Too many signup attempts. Please try again later.",
 });
 const verifyLimiter = rateLimit({
     windowMs: FIFTEEN_MINUTES,
@@ -35,16 +32,11 @@ const verifyLimiter = rateLimit({
     message: "Too many attempts. Please try again later.",
 });
 
-router.post("/signup", verifyLimiter, signup)
+router.post("/signup", signupLimiter, signup)
 router.post("/login", loginLimiter, login)
 router.post("/logout", logout)
 router.get("/me", auth, getMe)
-router.post("/sendotp", otpLimiter, sendotp)
 router.post("/add-contact", auth, addContact)
 router.put("/keys", auth, verifyLimiter, updateKeys)
-
-// Forgot / Reset password
-router.post("/forgot-password", otpLimiter, forgotPassword)
-router.post("/reset-password", verifyLimiter, resetPassword)
 
 module.exports = router;

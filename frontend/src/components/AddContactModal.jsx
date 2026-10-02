@@ -3,7 +3,7 @@ import { X, Search } from "lucide-react";
 import { useChatStore } from "../store/useChatStore";
 
 export default function AddContactModal({ isOpen, onClose }) {
-    const [uniqueId, setUniqueId] = useState("");
+    const [email, setEmail] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { addContact } = useChatStore();
 
@@ -11,14 +11,14 @@ export default function AddContactModal({ isOpen, onClose }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!uniqueId.trim()) return;
+        if (!email.trim()) return;
 
         setIsSubmitting(true);
-        const success = await addContact(uniqueId.trim());
+        const success = await addContact(email.trim());
         setIsSubmitting(false);
 
         if (success) {
-            setUniqueId("");
+            setEmail("");
             onClose();
         }
     };
@@ -42,18 +42,18 @@ export default function AddContactModal({ isOpen, onClose }) {
                     <div className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                                User Unique ID
+                                User Email
                             </label>
                             <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <Search className="h-5 w-5 text-gray-400" />
                                 </div>
                                 <input
-                                    type="text"
+                                    type="email"
                                     required
-                                    value={uniqueId}
-                                    onChange={(e) => setUniqueId(e.target.value)}
-                                    placeholder="Enter user's unique ID..."
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="Enter user's email..."
                                     className="block w-full pl-10 pr-3 border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 py-2 border bg-gray-50 outline-none"
                                 />
                             </div>
@@ -70,7 +70,7 @@ export default function AddContactModal({ isOpen, onClose }) {
                         </button>
                         <button
                             type="submit"
-                            disabled={isSubmitting || !uniqueId.trim()}
+                            disabled={isSubmitting || !email.trim()}
                             className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-xl hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                         >
                             {isSubmitting ? "Adding..." : "Add Contact"}

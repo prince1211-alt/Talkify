@@ -436,9 +436,9 @@ export const useChatStore = create((set, get) => ({
         }
     },
 
-    addContact: async (uniqueId) => {
+    addContact: async (email) => {
         try {
-            const res = await axiosInstance.post("/auth/add-contact", { uniqueId });
+            const res = await axiosInstance.post("/auth/add-contact", { email });
             toast.success("Contact added successfully");
             const contact = res.data?.targetUser;
             if (contact) {
@@ -456,9 +456,9 @@ export const useChatStore = create((set, get) => ({
         }
     },
 
-    addGroupMember: async (groupId, uniqueId) => {
+    addGroupMember: async (groupId, email) => {
         try {
-            const res = await axiosInstance.post(`/groups/${groupId}/add`, { uniqueId });
+            const res = await axiosInstance.post(`/groups/${groupId}/add`, { email });
             get().replaceGroup(res.data.group);
             toast.success("Member added");
             return true;

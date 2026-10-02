@@ -36,7 +36,7 @@ export const forceLogout = async () => {
 };
 
 // These endpoints return 401 for a wrong password etc. — that must not reload the page
-const PUBLIC_AUTH_ENDPOINTS = ["/auth/login", "/auth/signup", "/auth/sendotp", "/auth/forgot-password", "/auth/reset-password"];
+const PUBLIC_AUTH_ENDPOINTS = ["/auth/login", "/auth/signup"];
 
 // Handle 401 Unauthorized globally
 axiosInstance.interceptors.response.use(

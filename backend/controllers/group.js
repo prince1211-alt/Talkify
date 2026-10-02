@@ -5,8 +5,8 @@ const User = require("../models/User");
 const { io } = require("../config/socketio");
 const { uploadBufferToCloudinary } = require("../config/multer");
 
-// Only public profile fields — never emails or encrypted private keys
-const MEMBER_FIELDS = "fullName uniqueId profilePic status";
+// Only public profile fields (email is the contact identifier) — never encrypted private keys
+const MEMBER_FIELDS = "fullName email profilePic status";
 const MAX_CIPHERTEXT_LENGTH = 100000;
 
 const str = (value) => (typeof value === "string" ? value : "");
@@ -374,11 +374,11 @@ exports.leaveGroup = async (req, res) => {
 exports.addMember = async (req, res) => {
     try {
         const { groupId } = req.params;
-        const uniqueId = str((req.body || {}).uniqueId).trim();
+        const email = str((req.body || {}).email).trim().toLowerCase();
         if (!isValidId(groupId)) return res.status(400).json({ success: false, message: "Invalid group id" });
 
-        if (!uniqueId) {
-            return res.status(400).json({ success: false, message: "Member uniqueId is required" });
+        if (!email) {
+            return res.status(400).json({ success: false, message: "Member email is required" });
         }
 
         const group = await Group.findById(groupId);
@@ -389,7 +389,7 @@ exports.addMember = async (req, res) => {
             return res.status(403).json({ success: false, message: "Not authorized to add members" });
         }
 
-        const newMember = await User.findOne({ uniqueId }).select("_id");
+        const newMember = await User.findOne({ email }).collation({ locale: "en", strength: 2 }).select("_id");
         if (!newMember) {
             return res.status(404).json({ success: false, message: "User not found" });
         }
